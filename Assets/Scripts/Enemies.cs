@@ -56,6 +56,9 @@ public class Enemy : MonoBehaviour
 
         if (IsBoss) skillTimer = 2.5f;   // jeda sebelum serangan pertama
         if (sr != null) sr.color = tint;
+
+        // HP bar di atas boss/elite supaya sisa darahnya kelihatan
+        if (IsBoss) worldBar = EnemyWorldBar.Attach(new Color(0.95f, 0.35f, 0.32f));
     }
 
     // Dipakai senjata player: kurangi HP + tampilkan angka damage melayang.
@@ -71,6 +74,12 @@ public class Enemy : MonoBehaviour
                 Mathf.RoundToInt(amount).ToString(), col, IsBoss ? 1.4f : 0.9f);
         }
     }
+
+    // --- ancang-ancang serangan boss ---
+    bool pending;
+    float pendTimer;
+    BossSkill pendSkill;
+    EnemyWorldBar worldBar;
 
     void OnEnable() { if (!All.Contains(this)) All.Add(this); }
     void OnDisable() { All.Remove(this); }
@@ -123,6 +132,7 @@ public class Enemy : MonoBehaviour
             HealthPickup.Spawn(transform.position + (Vector3)(Random.insideUnitCircle * 0.6f), heal);
         }
 
+        if (worldBar != null) Destroy(worldBar.gameObject);
         Destroy(gameObject);
     }
 
@@ -153,16 +163,58 @@ public class Enemy : MonoBehaviour
 
         // --- serangan khusus boss (tidak memakai senjata player) ---
         // Boss biasa: 1 serangan. Boss yang punya cutscene: 2 kombinasi serangan.
+        // Setiap serangan didahului ancang-ancang (telegraph) supaya adil.
         if (IsBoss && Skill != BossSkill.None)
         {
             skillTimer -= Time.deltaTime;
-            if (skillTimer <= 0f) { Cast(Skill); skillTimer = CooldownFor(Skill); }
+            if (skillTimer <= 0f) { skillTimer = CooldownFor(Skill); Telegraph(Skill, 0f); }
         }
         if (IsBoss && Skill2 != BossSkill.None)
         {
             skill2Timer -= Time.deltaTime;
-            if (skill2Timer <= 0f) { Cast(Skill2); skill2Timer = CooldownFor(Skill2); }
+            if (skill2Timer <= 0f) { skill2Timer = CooldownFor(Skill2); Telegraph(Skill2, 0.2f); }
         }
+
+        if (pending)
+        {
+            pendTimer -= Time.deltaTime;
+            if (pendTimer <= 0f) { pending = false; Cast(pendSkill); }
+        }
+
+        // HP bar di atas boss
+        if (worldBar != null && Health != null)
+        {
+            float w = sr != null ? Mathf.Max(0.9f, sr.bounds.size.x * 1.08f) : 1.4f;
+            float h = sr != null ? Mathf.Clamp(sr.bounds.size.y * 0.08f, 0.12f, 0.34f) : 0.16f;
+            float top = sr != null ? sr.bounds.extents.y + 0.38f : 1.1f;
+            worldBar.Place(transform.position + Vector3.up * top, w, h);
+            worldBar.SetRatio(Health.Max <= 0f ? 0f : Health.Current / Health.Max);
+        }
+    }
+
+    // Ancang-ancang sebelum serangan: kasih peringatan visual + jeda singkat.
+    void Telegraph(BossSkill s, float extraDelay)
+    {
+        pending = true;
+        pendSkill = s;
+        pendTimer = 0.5f + extraDelay;
+
+        if (s == BossSkill.Laser)
+        {
+            Vector2 dir = (Vector2)player.transform.position - (Vector2)transform.position;
+            if (dir.sqrMagnitude < 0.0001f) dir = Vector2.right;
+            BossWarning.Line(transform.position, dir.normalized, 14f, 0.16f, pendTimer);
+        }
+        else if (s == BossSkill.Aura)
+        {
+            BossWarning.Ring(transform.position, 4.4f, pendTimer);
+        }
+        else
+        {
+            Burst.Spawn(transform.position, new Color(1f, 0.5f, 0.3f), 8, 3.5f, 0.14f, 0.5f);
+        }
+
+        AudioManager.Play("boss", 0.28f);
     }
 
     public static float CooldownFor(BossSkill s)
@@ -382,6 +434,87 @@ public class EnemyShot : MonoBehaviour
         {
             p.Hurt(damage);
             Destroy(gameObject);
+        }
+    }
+}
+
+// Peringatan visual sebelum serangan boss (biar player sempat menghindar).
+public class BossWarning : MonoBehaviour
+{
+    SpriteRenderer sr;
+    Vector3 baseScale;
+    float t, dur;
+    bool ring;
+
+    public static void Ring(Vector3 pos, float radius, float dur)
+    {
+        var sr = SpriteFactory.NewSprite("WarnRing", GameBootstrap.WorldRoot,
+            new Color(1f, 0.30f, 0.25f, 0.34f), true, 13, pos, radius * 2f);
+        var w = sr.gameObject.AddComponent<BossWarning>();
+        w.sr = sr; w.baseScale = sr.transform.localScale; w.dur = dur; w.ring = true;
+    }
+
+    public static void Line(Vector3 origin, Vector2 dir, float range, float width, float dur)
+    {
+        Vector3 mid = origin + (Vector3)(dir * (range * 0.5f));
+        var sr = SpriteFactory.NewSprite("WarnLine", GameBootstrap.WorldRoot,
+            new Color(1f, 0.30f, 0.22f, 0.34f), false, 13, mid, 1f);
+        sr.transform.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
+        sr.transform.localScale = new Vector3(range, width, 1f);
+        var w = sr.gameObject.AddComponent<BossWarning>();
+        w.sr = sr; w.baseScale = sr.transform.localScale; w.dur = dur;
+    }
+
+    void Update()
+    {
+        t += Time.deltaTime;
+        if (sr == null) { Destroy(gameObject); return; }
+
+        float k = 1f - Mathf.Clamp01(t / dur);
+        float throb = 1f + 0.07f * Mathf.Sin(Time.time * 26f);
+        sr.transform.localScale = ring
+            ? baseScale * throb
+            : new Vector3(baseScale.x, baseScale.y * throb, 1f);
+
+        var c = sr.color;
+        c.a = 0.08f + 0.30f * k;
+        sr.color = c;
+
+        if (t >= dur) Destroy(gameObject);
+    }
+}
+
+// Bar HP kecil di atas boss/elite (objek dunia, mengikuti musuh).
+public class EnemyWorldBar : MonoBehaviour
+{
+    SpriteRenderer bg, fill;
+    float ratio = 1f;
+
+    public static EnemyWorldBar Attach(Color color)
+    {
+        var go = new GameObject("EnemyBar");
+        if (GameBootstrap.WorldRoot != null) go.transform.SetParent(GameBootstrap.WorldRoot, false);
+
+        var bar = go.AddComponent<EnemyWorldBar>();
+        bar.bg = SpriteFactory.NewSprite("Bg", go.transform,
+            new Color(0.05f, 0.06f, 0.10f, 0.92f), false, 19, Vector3.zero, 1f);
+        bar.fill = SpriteFactory.NewSprite("Fill", go.transform, color, false, 20, Vector3.zero, 1f);
+        return bar;
+    }
+
+    public void SetRatio(float r) { ratio = Mathf.Clamp01(r); }
+
+    public void Place(Vector3 worldPos, float w, float h)
+    {
+        transform.position = worldPos;
+
+        if (bg != null) bg.transform.localScale = new Vector3(w + 0.10f, h + 0.08f, 1f);
+
+        if (fill != null)
+        {
+            float fw = Mathf.Max(0.001f, w * ratio);
+            fill.transform.localPosition = new Vector3(-(w - fw) * 0.5f, 0f, 0f);
+            fill.transform.localScale = new Vector3(fw, h, 1f);
         }
     }
 }

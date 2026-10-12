@@ -229,6 +229,77 @@ Kalau ingin mengedit seperti project Unity biasa (objek terlihat jelas di Hierar
 > Bagian yang diproses kode (lantai, dinding, dekorasi, gelombang musuh) tetap dibuat otomatis saat Play —
 > itu disengaja supaya tidak ada referensi yang "missing".
 
+## Kontrol
+
+| Aksi | Keyboard / Mouse | Gamepad |
+|---|---|---|
+| Gerak | `W` `A` `S` `D` atau panah | **stick kiri** |
+| Bidik | gerakkan **kursor** (crosshair ikut kursor) | mouse (gamepad belum untuk bidik) |
+| Tembak | **otomatis** | otomatis |
+| Dash | `Shift` | tombol **A** (`Jump`) |
+| Ultimate | `Q` (meter harus penuh, ada cooldown 25 detik) | mouse + `Q` |
+| Hening / Mute | `M` | — |
+| Pause | `Esc` | — |
+
+> Semua tombol di atas **bisa diubah** di menu **Pengaturan > TOMBOL** (klik tombolnya, lalu tekan
+> tombol baru; `Esc` untuk batal). Pilihannya disimpan otomatis. Menu Pengaturan juga punya
+> **TAMPILAN** untuk ganti **Layar Penuh / resolusi** — berguna saat presentasi pakai proyektor.
+
+> Gamepad memakai *Input Manager (Old)*. Kalau stick kiri tidak merespons, buka
+> **Edit > Project Settings > Player > Active Input Handling** = `Both`, lalu restart Unity.
+
+## Papan Skor (Leaderboard) untuk itch.io
+
+Ada **dua jenis skor** yang digabung otomatis di papan skor:
+
+1. **Skor pemain** di komputer itu (disimpan di `PlayerPrefs`, tanpa server).
+2. **Skor resmi** (ditandai **★**) yang dibaca dari file `leaderboard.json`.
+
+### Cara 1 — File bawaan (paling sederhana)
+
+Edit `Assets/StreamingAssets/leaderboard.json`, lalu build ulang.
+
+```json
+{
+  "items": [
+    { "name": "Mentor", "score": 24000, "kills": 820, "bosses": 11, "time": 640 }
+  ]
+}
+```
+
+Cocok untuk **rekor panitia / pemenang lomba sebelumnya**. Kekurangannya: setiap ganti isi harus build ulang.
+
+### Cara 2 — URL online (bisa update TANPA build ulang) ← disarankan
+
+1. Taruh `leaderboard.json` di hosting yang bisa diakses publik lewat **Raw/HTTPS**:
+   GitHub (`raw.githubusercontent.com/...`), GitHub Pages, gist raw, atau file di itch.io.
+2. Buka `Assets/Scripts/LeaderboardSource.cs`, isi:
+
+```csharp
+public const string RemoteUrl = "https://raw.githubusercontent.com/namamu/sea-chan/main/leaderboard.json";
+```
+
+3. Build sekali, upload ke itch.io. Setiap kali kamu ganti file itu di GitHub, **semua pemain
+   otomatis mendapat daftar terbaru** saat membuka game (hasil unduhan disimpan sebagai cache;
+   kalau offline, game tetap jalan dengan data terakhir).
+
+> **Kalau kamu build WebGL untuk itch.io**: `StreamingAssets` tidak bisa dibaca lewat File IO,
+> jadi **pakai Cara 2** (URL) — itu berfungsi di WebGL.
+
+### Kalau nanti mau skor pemain terkumpul otomatis (opsional)
+
+itch.io **tidak punya API leaderboard**. Kalau ingin skor semua pemain masuk ke satu papan,
+pilihan gratis yang paling praktis:
+
+| Layanan | Kenapa | Catatan |
+|---|---|---|
+| **dreamlo.com** | paling cepat: daftar → dapat 1 URL, lalu `GET https://dreamlo.com/lb/<kode>/add/<nama>/<skor>` untuk kirim dan `.../json` untuk baca | tanpa login, gratis |
+| **Supabase / Firebase** | REST/Realtime database, gratis, cocok kalau mau rapih & banyak pemain | perlu bikin project |
+| **Google Form** | kirim skor lewat form | paling sederhana tapi manual dibaca |
+
+Rancangan paling aman: **skor resmi tetap dari Cara 2** (papan "Hall of Fame" yang kamu kendalikan),
+dan skor pemain pakai layanan online di atas kalau memang perlu kompetisi antar pemain.
+
 ## Kredit
 
 - **Dibuat oleh: Mentor Divisi Game Dev** — Study Group SEA GEN 11.

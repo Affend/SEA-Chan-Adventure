@@ -16,6 +16,12 @@ public class UIManager : MonoBehaviour
     RectTransform hpFill, xpFill, chargeFill;
     Text comboText, hpText, ultLabel;
     Image lowHp;
+
+    // ---- pengaturan: layar & tombol ----
+    Button screenBtn;
+    readonly Dictionary<GameAction, Button> keyButtons = new Dictionary<GameAction, Button>();
+    GameAction? capturing;
+    float captureGuard;
     const float HpW = 420f, HpH = 34f, XpW = 420f, XpH = 18f;
 
     GameObject bossRoot;
@@ -126,34 +132,34 @@ public class UIManager : MonoBehaviour
         rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         Transform p = hudRoot.transform;
 
-        // panel kiri bawah
+        // panel kiri bawah (jarak label & bar dirapikan supaya tidak saling menimpa)
         UIFactory.Image("HudCard", p, new Color(0.05f, 0.07f, 0.11f, 0.72f),
-            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 24f), new Vector2(HpW + 40f, 202f));
+            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 24f), new Vector2(HpW + 40f, 226f));
 
-        UIFactory.Label(p, "HP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 196f),
-            new Vector2(80f, 24f), 20, UIFactory.TextDim, TextAnchor.LowerLeft, true);
-        UIFactory.Bar(p, "HpBar", new Vector2(44f, 168f), new Vector2(HpW, HpH),
+        UIFactory.Label(p, "HP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 212f),
+            new Vector2(120f, 22f), 20, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+        UIFactory.Bar(p, "HpBar", new Vector2(44f, 172f), new Vector2(HpW, HpH),
             new Color(0.90f, 0.25f, 0.33f), out hpFill);
 
-        UIFactory.Label(p, "EXP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 144f),
-            new Vector2(80f, 22f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
-        UIFactory.Bar(p, "XpBar", new Vector2(44f, 120f), new Vector2(XpW, XpH),
+        // angka HP di atas bar (mis. 78 / 120)
+        hpText = UIFactory.Label(p, "", Vector2.zero, Vector2.zero, Vector2.zero,
+            new Vector2(296f, 178f), new Vector2(168f, 28f), 21,
+            UIFactory.TextMain, TextAnchor.LowerRight, true);
+
+        UIFactory.Label(p, "EXP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 150f),
+            new Vector2(120f, 20f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+        UIFactory.Bar(p, "XpBar", new Vector2(44f, 128f), new Vector2(XpW, XpH),
             new Color(0.35f, 0.90f, 0.62f), out xpFill);
 
-        ultLabel = UIFactory.Label(p, "ULTIMATE  (Q)", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 94f),
-            new Vector2(300f, 22f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+        ultLabel = UIFactory.Label(p, "ULTIMATE  (Q)", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 104f),
+            new Vector2(340f, 20f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
         RectTransform chargeRt;
-        UIFactory.Bar(p, "ChargeBar", new Vector2(44f, 70f), new Vector2(XpW, XpH),
+        UIFactory.Bar(p, "ChargeBar", new Vector2(44f, 80f), new Vector2(XpW, XpH),
             new Color(0.45f, 0.92f, 1f), out chargeRt);
         chargeFill = chargeRt;
 
         levelText = UIFactory.Label(p, "LV 1", Vector2.zero, Vector2.zero, Vector2.zero,
             new Vector2(300f, 34f), new Vector2(200f, 30f), 24, UIFactory.Accent2, TextAnchor.LowerLeft, true);
-
-        // angka HP di ujung bar
-        hpText = UIFactory.Label(p, "", Vector2.zero, Vector2.zero, Vector2.zero,
-            new Vector2(300f, 168f), new Vector2(164f, 30f), 20,
-            UIFactory.TextMain, TextAnchor.LowerRight);
 
         // indikator combo (bunuh beruntun)
         comboText = UIFactory.Label(p, "", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
@@ -702,16 +708,21 @@ public class UIManager : MonoBehaviour
         var bg = UIFactory.FullPanel(c, "SettingsRoot", new Color(0.02f, 0.03f, 0.06f, 0.92f));
         settingsRoot = bg.gameObject;
 
-        var card = UIFactory.Card(settingsRoot.transform, "Card", Vector2.zero, new Vector2(820f, 540f),
+        var card = UIFactory.Card(settingsRoot.transform, "Card", Vector2.zero, new Vector2(900f, 940f),
             new Color(0.20f, 0.78f, 0.72f, 1f));
 
-        UIFactory.Label(card, "PENGATURAN AUDIO", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 200f), new Vector2(760f, 56f), 40,
+        UIFactory.Label(card, "PENGATURAN", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 400f), new Vector2(840f, 54f), 40,
             UIFactory.TextMain, TextAnchor.MiddleCenter, true);
 
-        masterVal = VolumeRow(card, "Master Volume", 110f, new Color(0.90f, 0.90f, 0.95f), out masterSlider);
-        musicVal = VolumeRow(card, "Musik", 20f, new Color(0.45f, 0.75f, 1f), out musicSlider);
-        sfxVal = VolumeRow(card, "Efek Suara", -70f, new Color(1f, 0.78f, 0.35f), out sfxSlider);
+        // ---------------- AUDIO ----------------
+        UIFactory.Label(card, "AUDIO", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 330f), new Vector2(780f, 30f), 24,
+            UIFactory.Accent2, TextAnchor.LowerLeft, true);
+
+        masterVal = VolumeRow(card, "Master Volume", 270f, new Color(0.90f, 0.90f, 0.95f), out masterSlider);
+        musicVal = VolumeRow(card, "Musik", 180f, new Color(0.45f, 0.75f, 1f), out musicSlider);
+        sfxVal = VolumeRow(card, "Efek Suara", 90f, new Color(1f, 0.78f, 0.35f), out sfxSlider);
 
         if (AudioManager.Instance != null)
         {
@@ -725,8 +736,82 @@ public class UIManager : MonoBehaviour
         musicSlider.onValueChanged.AddListener(v => { AudioManager.Instance.SetMusic(v); RefreshVolumeLabels(); });
         sfxSlider.onValueChanged.AddListener(v => { AudioManager.Instance.SetSfx(v); RefreshVolumeLabels(); });
 
-        UIFactory.TextButton(card, "KEMBALI", new Vector2(0f, -190f), new Vector2(320f, 68f), 28,
+        // ---------------- TAMPILAN ----------------
+        UIFactory.Label(card, "TAMPILAN", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(780f, 30f), 24,
+            UIFactory.Accent2, TextAnchor.LowerLeft, true);
+
+        screenBtn = UIFactory.TextButton(card, ScreenSetup.Label(), new Vector2(-150f, -50f),
+            new Vector2(380f, 60f), 26,
+            () => { ScreenSetup.Cycle(); SetButtonText(screenBtn, ScreenSetup.Label()); });
+
+        UIFactory.Label(card, "layar penuh / resolusi",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(215f, -50f), new Vector2(340f, 30f), 19, UIFactory.TextDim, TextAnchor.MiddleLeft);
+
+        // ---------------- TOMBOL (REMAP) ----------------
+        UIFactory.Label(card, "TOMBOL", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -115f), new Vector2(780f, 30f), 24,
+            UIFactory.Accent2, TextAnchor.LowerLeft, true);
+        UIFactory.Label(card, "klik tombolnya, lalu tekan tombol baru  (Esc = batal)",
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, -145f), new Vector2(780f, 24f), 17, UIFactory.TextDim, TextAnchor.LowerLeft);
+
+        MakeKeyButton(card, GameAction.Dash, new Vector2(-215f, -200f));
+        MakeKeyButton(card, GameAction.Ultimate, new Vector2(215f, -200f));
+        MakeKeyButton(card, GameAction.Pause, new Vector2(-215f, -275f));
+        MakeKeyButton(card, GameAction.Mute, new Vector2(215f, -275f));
+
+        UIFactory.TextButton(card, "KEMBALI", new Vector2(0f, -380f), new Vector2(320f, 68f), 28,
             () => { var r = settingsReturn; ShowSettings(false); r?.Invoke(); });
+    }
+
+    void MakeKeyButton(Transform card, GameAction action, Vector2 pos)
+    {
+        var btn = UIFactory.TextButton(card, Keybinds.Name(action) + ":  " + Keybinds.Label(action),
+            pos, new Vector2(400f, 62f), 24, () => StartCapture(action));
+        keyButtons[action] = btn;
+    }
+
+    static void SetButtonText(Button btn, string text)
+    {
+        if (btn == null) return;
+        var t = btn.GetComponentInChildren<Text>();
+        if (t != null) t.text = text;
+    }
+
+    void StartCapture(GameAction action)
+    {
+        capturing = action;
+        Keybinds.Capturing = true;
+        captureGuard = 0.25f;   // jeda sebentar supaya klik mouse tidak ikut tertangkap
+        SetButtonText(keyButtons.ContainsKey(action) ? keyButtons[action] : null, "TEKAN TOMBOL BARU...");
+    }
+
+    void FinishCapture()
+    {
+        if (capturing.HasValue && keyButtons.ContainsKey(capturing.Value))
+            SetButtonText(keyButtons[capturing.Value],
+                Keybinds.Name(capturing.Value) + ":  " + Keybinds.Label(capturing.Value));
+        capturing = null;
+        Keybinds.Capturing = false;
+    }
+
+    // Dipanggil setelah leaderboard resmi selesai diunduh.
+    public void RefreshLeaderboard()
+    {
+        RefreshBoards();
+        if (menuBestText != null) menuBestText.text = "Rekor tertinggi: " + Leaderboard.Best();
+    }
+
+    // Dipanggil saat suara di-toggle dengan tombol cepat.
+    public void RefreshVolumeUI()
+    {
+        if (AudioManager.Instance == null || masterSlider == null) return;
+        masterSlider.SetValueWithoutNotify(AudioManager.Instance.Master);
+        musicSlider.SetValueWithoutNotify(AudioManager.Instance.MusicVol);
+        sfxSlider.SetValueWithoutNotify(AudioManager.Instance.SfxVol);
+        RefreshVolumeLabels();
     }
 
     Text VolumeRow(Transform card, string label, float y, Color color, out Slider slider)
@@ -781,36 +866,37 @@ public class UIManager : MonoBehaviour
         var bg = UIFactory.FullPanel(c, "GameOverRoot", new Color(0.08f, 0.02f, 0.04f, 0.93f));
         gameOverRoot = bg.gameObject;
 
-        var card = UIFactory.Card(gameOverRoot.transform, "Card", Vector2.zero, new Vector2(980f, 820f),
+        var card = UIFactory.Card(gameOverRoot.transform, "Card", Vector2.zero, new Vector2(1000f, 1000f),
             new Color(0.90f, 0.30f, 0.35f, 1f));
 
         UIFactory.Label(card, "GAME OVER", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 330f), new Vector2(900f, 76f), 58,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 424f), new Vector2(900f, 76f), 58,
             new Color(1f, 0.45f, 0.45f), TextAnchor.MiddleCenter, true);
 
         goStats = UIFactory.Label(card, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 232f), new Vector2(900f, 150f), 28,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 325f), new Vector2(900f, 140f), 28,
             UIFactory.TextMain, TextAnchor.MiddleCenter);
 
         UIFactory.Label(card, "Masukkan namamu untuk papan skor:", new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 138f),
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 232f),
             new Vector2(760f, 30f), 22, UIFactory.TextDim, TextAnchor.MiddleCenter);
 
-        nameField = UIFactory.NameField(card, "NameField", new Vector2(0f, 86f), new Vector2(460f, 58f), "Nama kamu");
-        saveButton = UIFactory.TextButton(card, "SIMPAN SKOR", new Vector2(0f, 16f), new Vector2(360f, 56f), 24,
+        nameField = UIFactory.NameField(card, "NameField", new Vector2(0f, 180f), new Vector2(460f, 58f), "Nama kamu");
+        saveButton = UIFactory.TextButton(card, "SIMPAN SKOR", new Vector2(0f, 105f), new Vector2(360f, 56f), 24,
             () => SaveScore());
 
         boardHint = UIFactory.Label(card, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, -26f), new Vector2(900f, 28f), 22,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 62f), new Vector2(900f, 28f), 22,
             UIFactory.Accent, TextAnchor.MiddleCenter, true);
 
+        // papan skor: font lebih kecil + kotak 10 baris, berhenti jauh di atas tombol
         boardText = UIFactory.Label(card, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, -150f), new Vector2(900f, 210f), 24,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -120f), new Vector2(940f, 310f), 22,
             UIFactory.TextMain, TextAnchor.UpperCenter);
 
-        UIFactory.TextButton(card, "MAIN LAGI", new Vector2(-220f, -320f), new Vector2(420f, 66f), 28,
+        UIFactory.TextButton(card, "MAIN LAGI", new Vector2(-220f, -395f), new Vector2(420f, 66f), 28,
             () => GameManager.Instance.StartGame());
-        UIFactory.TextButton(card, "MENU UTAMA", new Vector2(220f, -320f), new Vector2(420f, 66f), 28,
+        UIFactory.TextButton(card, "MENU UTAMA", new Vector2(220f, -395f), new Vector2(420f, 66f), 28,
             () => GameManager.Instance.ReturnToMenu());
 
         gameOverRoot.SetActive(false);
@@ -964,6 +1050,19 @@ public class UIManager : MonoBehaviour
 
     void Update()
     {
+        // ---- mode "tekan tombol baru" di pengaturan ----
+        if (capturing.HasValue)
+        {
+            if (captureGuard > 0f) captureGuard -= Time.unscaledDeltaTime;
+            else if (Input.GetKeyDown(KeyCode.Escape)) FinishCapture();   // batal
+            else
+            {
+                KeyCode k;
+                if (Keybinds.TryCapture(out k)) { Keybinds.Set(capturing.Value, k); FinishCapture(); }
+            }
+            return;   // jangan proses UI lain saat menunggu tombol
+        }
+
         var gm = GameManager.Instance;
         bool playing = gm != null && gm.IsRunning;
 
@@ -1132,12 +1231,20 @@ public class UIManager : MonoBehaviour
         }
     }
 
-    // Level senjata ditampilkan sebagai titik (●●●○○)
+    // Level senjata ditampilkan sebagai titik: terisi (terang) & kosong (redup).
+    // Dipakai karakter '•' + pewarnaan rich-text, karena font Bahnschrift
+    // tidak punya glyph ● / ○ (dulu tampil sebagai kotak/silang).
     static string Pips(int level, int max)
     {
         if (max <= 0) max = 6;
-        var sb = new System.Text.StringBuilder(max);
-        for (int i = 0; i < max; i++) sb.Append(i < level ? '●' : '○');
+        level = Mathf.Clamp(level, 0, max);
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("<color=#8DEBFF>");                          // terisi
+        for (int i = 0; i < level; i++) sb.Append('•');
+        sb.Append("</color><color=#49536B>");                  // kosong
+        for (int i = level; i < max; i++) sb.Append('•');
+        sb.Append("</color>");
         return sb.ToString();
     }
 

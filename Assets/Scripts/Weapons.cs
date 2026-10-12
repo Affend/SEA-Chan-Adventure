@@ -90,10 +90,7 @@ public class PlayerController : MonoBehaviour
         }
 
         Vector2 m = Vector2.zero;
-        if (InputHelper.GetKey(KeyCode.A) || InputHelper.GetKey(KeyCode.LeftArrow)) m.x -= 1f;
-        if (InputHelper.GetKey(KeyCode.D) || InputHelper.GetKey(KeyCode.RightArrow)) m.x += 1f;
-        if (InputHelper.GetKey(KeyCode.S) || InputHelper.GetKey(KeyCode.DownArrow)) m.y -= 1f;
-        if (InputHelper.GetKey(KeyCode.W) || InputHelper.GetKey(KeyCode.UpArrow)) m.y += 1f;
+        m += InputHelper.MoveAxis();   // keyboard (WASD/panah) + gamepad stick kiri
         if (m.sqrMagnitude > 1f) m = m.normalized;
 
         Moving = m.sqrMagnitude > 0.0001f;
@@ -103,7 +100,8 @@ public class PlayerController : MonoBehaviour
         if (dashCd > 0f) dashCd -= Time.deltaTime;
         if (dashTime > 0f) dashTime -= Time.deltaTime;
 
-        bool dashKey = InputHelper.GetKeyDown(KeyCode.LeftShift) || InputHelper.GetKeyDown(KeyCode.RightShift);
+        bool dashKey = InputHelper.GetKeyDown(Keybinds.Get(GameAction.Dash))
+                       || InputHelper.GetButtonDownSafe("Jump");   // gamepad: tombol A / bawah
         if (dashKey && dashCd <= 0f && MoveDir.sqrMagnitude > 0.01f)
         {
             dashTime = dashDuration;
@@ -144,8 +142,8 @@ public class PlayerStats : MonoBehaviour
 {
     public int Level { get; private set; } = 1;
     public float XP { get; private set; }
-    public float XPToNext { get; private set; } = 5f;
-    public float XPGrowth = 1.25f;
+    public float XPToNext { get; private set; } = 14f;
+    public float XPGrowth = 1.28f;
 
     public float DamageBonus = 0f;
     public float CooldownReduction = 0f;
@@ -167,7 +165,7 @@ public class PlayerStats : MonoBehaviour
     {
         Level = 1;
         XP = 0f;
-        XPToNext = 5f;
+        XPToNext = 14f;
         invulnUntil = 0f;
         overdriveUntil = 0f;
         shieldUntil = 0f;

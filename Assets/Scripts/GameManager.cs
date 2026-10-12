@@ -51,6 +51,15 @@ public class GameManager : MonoBehaviour
 
         Instance = this;
         State = GameState.Intro;
+
+        ScreenSetup.Load();            // terapkan mode layar tersimpan
+        LeaderboardSource.LoadLocal();  // baca skor resmi dari file bawaan
+    }
+
+    void Start()
+    {
+        // coba ambil leaderboard resmi terbaru (kalau URL diisi) — gagal pun tidak masalah
+        StartCoroutine(LeaderboardSource.RefreshRemote());
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -93,11 +102,18 @@ public class GameManager : MonoBehaviour
 
             if (UltimateCooldown > 0f) UltimateCooldown -= Time.deltaTime;
 
-            // ultimate: tekan Q kalau meter sudah penuh (dan tidak sedang cooldown)
-            if (ChargeReady && InputHelper.GetKeyDown(KeyCode.Q)) Unleash();
+            // ultimate: tekan tombol (bawaan Q) kalau meter penuh & tidak cooldown
+            if (!Keybinds.Capturing && ChargeReady &&
+                InputHelper.GetKeyDown(Keybinds.Get(GameAction.Ultimate))) Unleash();
         }
 
-        if (InputHelper.GetKeyDown(KeyCode.Escape) &&
+        // tombol bisa diubah di Pengaturan (bawaan: Esc / M)
+        if (!Keybinds.Capturing && InputHelper.GetKeyDown(Keybinds.Get(GameAction.Mute)))
+        {
+            if (AudioManager.Instance != null) AudioManager.Instance.ToggleMute();
+        }
+
+        if (!Keybinds.Capturing && InputHelper.GetKeyDown(Keybinds.Get(GameAction.Pause)) &&
             (State == GameState.Playing || State == GameState.Paused))
             TogglePause();
     }

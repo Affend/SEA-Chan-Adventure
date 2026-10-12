@@ -135,6 +135,30 @@ public class AudioManager : MonoBehaviour
         ApplyVolumes();
     }
 
+    // Tombol cepat (bawaan M): matikan / nyalakan semua suara.
+    public bool Muted { get; private set; }
+    float beforeMute = 0.8f;
+
+    public void ToggleMute()
+    {
+        Muted = !Muted;
+        if (Muted)
+        {
+            beforeMute = Master > 0.01f ? Master : 0.8f;
+            SetMaster(0f);
+        }
+        else
+        {
+            SetMaster(beforeMute);
+        }
+
+        if (UIManager.Instance != null)
+            UIManager.Instance.ShowBanner(Muted ? "SUARA: MATI" : "SUARA: HIDUP");
+
+        // ikutkan slider Master di menu pengaturan (kalau sedang terbuka)
+        if (UIManager.Instance != null) UIManager.Instance.RefreshVolumeUI();
+    }
+
     public void SetMusic(float v)
     {
         MusicVol = Mathf.Clamp01(v);

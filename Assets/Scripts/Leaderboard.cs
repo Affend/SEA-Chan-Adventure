@@ -11,6 +11,8 @@ public class ScoreEntry
     public int kills;
     public int bosses;
     public float time;
+    // true = skor resmi dari leaderboard.json (bukan hasil main di komputer ini)
+    public bool official;
 }
 
 [Serializable]
@@ -65,8 +67,41 @@ public static class Leaderboard
 
     public static int Best()
     {
-        var l = Load();
+        var l = Merged(1);
         return l.Count > 0 ? l[0].score : 0;
+    }
+
+    // Membaca daftar skor dari teks JSON (dipakai leaderboard.json).
+    public static List<ScoreEntry> ParseItems(string json)
+    {
+        var result = new List<ScoreEntry>();
+        if (string.IsNullOrEmpty(json)) return result;
+        try
+        {
+            var l = JsonUtility.FromJson<ScoreList>(json);
+            if (l != null && l.items != null)
+            {
+                foreach (var e in l.items)
+                {
+                    if (e == null || string.IsNullOrEmpty(e.name)) continue;
+                    e.official = true;
+                    result.Add(e);
+                }
+            }
+        }
+        catch { }
+        return result;
+    }
+
+    // Gabungan: skor pemain di komputer ini + skor resmi dari file/unduhan.
+    public static List<ScoreEntry> Merged(int maxRows)
+    {
+        var all = new List<ScoreEntry>();
+        all.AddRange(Load());
+        all.AddRange(LeaderboardSource.Entries);
+        all.Sort((a, b) => b.score.CompareTo(a.score));
+        if (maxRows > 0 && all.Count > maxRows) all.RemoveRange(maxRows, all.Count - maxRows);
+        return all;
     }
 
     public static void Clear()
@@ -77,15 +112,16 @@ public static class Leaderboard
 
     public static string Format(int maxRows)
     {
-        var list = Load();
+        var list = Merged(maxRows);
         if (list.Count == 0) return "Belum ada skor. Jadilah yang pertama!";
 
         var sb = new System.Text.StringBuilder();
-        int n = Mathf.Min(maxRows, list.Count);
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < list.Count; i++)
         {
             var e = list[i];
-            sb.Append(i + 1).Append(".  ").Append(e.name)
+            sb.Append(i + 1).Append(".  ");
+            if (e.official) sb.Append("[RESMI] ");   // skor dari file leaderboard
+            sb.Append(e.name)
               .Append("  —  ").Append(e.score)
               .Append("   (musuh ").Append(e.kills).Append(", boss ").Append(e.bosses).Append(")\n");
         }
