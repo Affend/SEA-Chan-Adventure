@@ -120,6 +120,30 @@ public static class Keybinds
     }
 }
 
+// Ukuran UI — berguna kalau dipresentasikan di layar besar / proyektor.
+public static class UiScale
+{
+    static readonly float[] Steps = { 1.0f, 1.15f, 1.3f, 1.5f };
+    const string Key = "sea_ui_scale";
+    static int index;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics() { index = 0; }
+
+    public static float Factor => Steps[Mathf.Clamp(index, 0, Steps.Length - 1)];
+
+    public static void Load() { index = Mathf.Clamp(PlayerPrefs.GetInt(Key, 0), 0, Steps.Length - 1); }
+
+    public static void Cycle()
+    {
+        index = (index + 1) % Steps.Length;
+        PlayerPrefs.SetInt(Key, index);
+        PlayerPrefs.Save();
+    }
+
+    public static string Label() { return Mathf.RoundToInt(Factor * 100f) + "%"; }
+}
+
 // Mode tampilan: layar penuh atau resolusi jendela tertentu.
 public static class ScreenSetup
 {

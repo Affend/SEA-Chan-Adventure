@@ -241,6 +241,14 @@ public class GameManager : MonoBehaviour
         State = GameState.UpgradeSelect;
         Time.timeScale = 0f;
 
+        // efek naik level: cincin + percikan di sekeliling pemain, lalu teks "LEVEL UP!"
+        if (Player != null)
+        {
+            AuraVisual.Spawn(Player.transform.position, 3.2f, new Color(0.55f, 0.95f, 1f, 0.55f));
+            Burst.Spawn(Player.transform.position, new Color(0.7f, 0.95f, 1f), 18, 7f, 0.22f, 0.6f);
+        }
+        if (UIManager.Instance != null) UIManager.Instance.ShowLevelUp(level);
+
         var options = UpgradeManager.Roll(Player, 3);
         if (UIManager.Instance != null)
         {

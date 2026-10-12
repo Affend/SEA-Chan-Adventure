@@ -68,6 +68,11 @@ public class PlayerController : MonoBehaviour
         Health.TakeDamage(amount);
     }
 
+    // Dipakai HUD untuk menampilkan kesiapan dash.
+    public float DashCooldownLeft => Mathf.Max(0f, dashCd);
+    public float DashCooldownMax => Mathf.Max(0.01f, dashCooldown);
+    public bool DashReady => dashCd <= 0f;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     public static void ResetStatics() { Active = null; }
 

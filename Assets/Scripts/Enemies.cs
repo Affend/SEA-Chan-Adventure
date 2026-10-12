@@ -57,6 +57,10 @@ public class Enemy : MonoBehaviour
         if (IsBoss) skillTimer = 2.5f;   // jeda sebelum serangan pertama
         if (sr != null) sr.color = tint;
 
+        baseTint = tint;
+        // boss (sprite putih) tetap terlihat berkedip kalau dipakai warna hangat
+        flashColor = IsBoss ? new Color(1f, 0.42f, 0.42f) : Color.white;
+
         // HP bar di atas boss/elite supaya sisa darahnya kelihatan
         if (IsBoss) worldBar = EnemyWorldBar.Attach(new Color(0.95f, 0.35f, 0.32f));
     }
@@ -66,6 +70,7 @@ public class Enemy : MonoBehaviour
     {
         if (Health == null || Health.IsDead) return;
         Health.TakeDamage(amount);
+        hitFlash = HitFlashTime;   // berkedip putih sebentar
 
         if (amount >= 5f && Random.value < 0.55f)
         {
@@ -80,6 +85,15 @@ public class Enemy : MonoBehaviour
     float pendTimer;
     BossSkill pendSkill;
     EnemyWorldBar worldBar;
+
+    // --- kilatan saat kena serangan (umpan balik) ---
+    const float HitFlashTime = 0.09f;
+    Color baseTint = Color.white;
+    Color flashColor = Color.white;
+    float hitFlash;
+
+    // Boss cutscene (2 serangan) ditandai sebagai ELITE di UI.
+    public bool IsElite => IsBoss && Skill2 != BossSkill.None;
 
     void OnEnable() { if (!All.Contains(this)) All.Add(this); }
     void OnDisable() { All.Remove(this); }
@@ -138,6 +152,16 @@ public class Enemy : MonoBehaviour
 
     void Update()
     {
+        // kilatan putih saat baru kena serangan (umpan balik agar serangan terasa)
+        if (hitFlash > 0f)
+        {
+            hitFlash -= Time.deltaTime;
+            if (sr != null)
+                sr.color = hitFlash > 0f
+                    ? Color.Lerp(baseTint, flashColor, Mathf.Clamp01(hitFlash / HitFlashTime))
+                    : baseTint;
+        }
+
         var gm = GameManager.Instance;
         if (gm == null || !gm.IsRunning || player == null) return;
 
@@ -630,6 +654,10 @@ public class EnemySpawner : MonoBehaviour
             if (Enemy.All[i] != null && Enemy.All[i].IsBoss) return true;
         return false;
     }
+
+    // Dipakai HUD: hitungan mundur menuju boss berikutnya.
+    public float SecondsToBoss => Mathf.Max(0f, bossTimer);
+    public bool BossAliveNow => BossAlive();
 
     Vector3 EdgePosition()
     {

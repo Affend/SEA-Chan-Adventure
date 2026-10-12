@@ -149,6 +149,40 @@ public static class UIFactory
         return t;
     }
 
+    // Vignette radial (gelap/terang di TEPI saja) untuk peringatan HP rendah.
+    static Sprite _vignette;
+    public static Sprite Vignette
+    {
+        get
+        {
+            if (_vignette == null)
+            {
+                const int s = 96;
+                var tex = new Texture2D(s, s, TextureFormat.RGBA32, false);
+                tex.filterMode = FilterMode.Bilinear;
+                tex.wrapMode = TextureWrapMode.Clamp;
+                var px = new Color32[s * s];
+                float c = (s - 1) * 0.5f;
+
+                for (int y = 0; y < s; y++)
+                {
+                    for (int x = 0; x < s; x++)
+                    {
+                        float dx = (x - c) / c;
+                        float dy = (y - c) / c;
+                        float d = Mathf.Sqrt(dx * dx + dy * dy);          // 0 tengah, ~1 tepi
+                        float a = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.45f, 1.05f, d));
+                        px[y * s + x] = new Color32(255, 255, 255, (byte)Mathf.RoundToInt(a * 255f));
+                    }
+                }
+                tex.SetPixels32(px);
+                tex.Apply();
+                _vignette = Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), s);
+            }
+            return _vignette;
+        }
+    }
+
     public static Button TextButton(Transform parent, string text, Vector2 anchored, Vector2 size,
         int fontSize, System.Action onClick)
     {

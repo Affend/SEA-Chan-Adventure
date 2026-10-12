@@ -110,7 +110,8 @@ public static class Leaderboard
         PlayerPrefs.Save();
     }
 
-    public static string Format(int maxRows)
+    // highlightScore/highlightName = isi yang baru saja disimpan pemain (diberi warna + tanda).
+    public static string Format(int maxRows, string highlightName = null, int highlightScore = -1)
     {
         var list = Merged(maxRows);
         if (list.Count == 0) return "Belum ada skor. Jadilah yang pertama!";
@@ -119,11 +120,25 @@ public static class Leaderboard
         for (int i = 0; i < list.Count; i++)
         {
             var e = list[i];
+            bool mine = highlightName != null && e.name == highlightName && e.score == highlightScore;
+
+            // warna medali untuk 3 besar
+            string col;
+            if (mine) col = "#8DEBFF";
+            else if (i == 0) col = "#FFD34D";
+            else if (i == 1) col = "#CFD8E6";
+            else if (i == 2) col = "#E0A66A";
+            else col = "#EAF0FA";
+
+            sb.Append("<color=").Append(col).Append('>');
             sb.Append(i + 1).Append(".  ");
             if (e.official) sb.Append("[RESMI] ");   // skor dari file leaderboard
+            if (mine) sb.Append("> ");
             sb.Append(e.name)
               .Append("  —  ").Append(e.score)
-              .Append("   (musuh ").Append(e.kills).Append(", boss ").Append(e.bosses).Append(")\n");
+              .Append("   (musuh ").Append(e.kills).Append(", boss ").Append(e.bosses).Append(")");
+            if (mine) sb.Append("   << KAMU");
+            sb.Append("</color>\n");
         }
         return sb.ToString();
     }

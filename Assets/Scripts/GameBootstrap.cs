@@ -252,7 +252,8 @@ public class GameBootstrap : MonoBehaviour
         player.transform.SetParent(gp.transform, false);
         var sr = player.AddComponent<SpriteRenderer>();
         sr.sprite = SpriteFactory.Circle;
-        sr.color = new Color(0.58f, 0.78f, 1f);
+        // tanpa tint — supaya warna asli sprite SEA Chan terlihat natural
+        sr.color = Color.white;
         sr.sortingOrder = 12;
         var rb = player.AddComponent<Rigidbody2D>();
         rb.gravityScale = 0f;
@@ -307,7 +308,8 @@ public class GameBootstrap : MonoBehaviour
         go.transform.position = new Vector3(0f, 0f, 0f);
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = SpriteFactory.Circle;
-        sr.color = new Color(0.58f, 0.78f, 1f);
+        // tanpa tint — supaya warna asli sprite SEA Chan terlihat natural
+        sr.color = Color.white;
         sr.sortingOrder = 12;
 
         var ptex = Resources.Load<Texture2D>("SEAChan/seachan_front_0");
@@ -337,7 +339,8 @@ public class GameBootstrap : MonoBehaviour
 
         var sr = go.AddComponent<SpriteRenderer>();
         sr.sprite = SpriteFactory.Circle;
-        sr.color = new Color(0.58f, 0.78f, 1f);
+        // tanpa tint — supaya warna asli sprite SEA Chan terlihat natural
+        sr.color = Color.white;
         sr.sortingOrder = 12;
 
         var rb = go.AddComponent<Rigidbody2D>();

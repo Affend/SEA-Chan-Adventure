@@ -17,8 +17,25 @@ public class UIManager : MonoBehaviour
     Text comboText, hpText, ultLabel;
     Image lowHp;
 
+    // ---- HUD tambahan ----
+    Text dashText, buffText, bossTimerText, hintText, levelUpText, pauseStats;
+    RectTransform hpLagRt;
+    CanvasScaler scaler;
+    float hpLagRatio = 1f, comboPulse, levelUpT, hintT;
+    int lastCombo;
+
+    // ---- papan skor: tandai skor yang baru saja disimpan ----
+    string myName;
+    int myScore = -1;
+
+    // ---- latar menu beranimasi ----
+    RectTransform menuFxRoot;
+    readonly List<RectTransform> menuFx = new List<RectTransform>();
+    readonly List<Vector2> menuFxDir = new List<Vector2>();
+
     // ---- pengaturan: layar & tombol ----
     Button screenBtn;
+    Button uiScaleBtn;
     readonly Dictionary<GameAction, Button> keyButtons = new Dictionary<GameAction, Button>();
     GameAction? capturing;
     float captureGuard;
@@ -110,6 +127,10 @@ public class UIManager : MonoBehaviour
         BuildPause(c);
         BuildGameOver(c);
         BuildLeaderboard(c);
+
+        // terapkan pengaturan tampilan yang tersimpan (ukuran UI)
+        UiScale.Load();
+        ApplyUiScale();
         BuildUpgrade(c);
         BuildIntro(c);
 
@@ -132,43 +153,65 @@ public class UIManager : MonoBehaviour
         rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
         Transform p = hudRoot.transform;
 
-        // panel kiri bawah (jarak label & bar dirapikan supaya tidak saling menimpa)
-        UIFactory.Image("HudCard", p, new Color(0.05f, 0.07f, 0.11f, 0.72f),
-            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 24f), new Vector2(HpW + 40f, 226f));
+        // ---- panel kiri bawah: status pemain (label di ATAS bar, tidak menimpa) ----
+        UIFactory.Image("HudCard", p, new Color(0.05f, 0.07f, 0.11f, 0.78f),
+            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 24f), new Vector2(HpW + 40f, 250f));
+        UIFactory.Image("HudCardTop", p, UIFactory.Accent2,
+            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 270f), new Vector2(HpW + 40f, 4f));
 
-        UIFactory.Label(p, "HP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 212f),
+        UIFactory.Label(p, "HP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 236f),
             new Vector2(120f, 22f), 20, UIFactory.TextDim, TextAnchor.LowerLeft, true);
-        UIFactory.Bar(p, "HpBar", new Vector2(44f, 172f), new Vector2(HpW, HpH),
+        UIFactory.Bar(p, "HpBar", new Vector2(44f, 196f), new Vector2(HpW, HpH),
             new Color(0.90f, 0.25f, 0.33f), out hpFill);
 
-        // angka HP di atas bar (mis. 78 / 120)
+        // bayangan damage: menyusut pelan setelah player kena serangan
+        var lag = UIFactory.Image("HpLag", p, new Color(1f, 0.88f, 0.88f, 0.45f),
+            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 199f), new Vector2(0f, HpH - 6f));
+        hpLagRt = lag.rectTransform;
+
         hpText = UIFactory.Label(p, "", Vector2.zero, Vector2.zero, Vector2.zero,
-            new Vector2(296f, 178f), new Vector2(168f, 28f), 21,
+            new Vector2(296f, 202f), new Vector2(168f, 28f), 21,
             UIFactory.TextMain, TextAnchor.LowerRight, true);
 
-        UIFactory.Label(p, "EXP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 150f),
+        UIFactory.Label(p, "EXP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 174f),
             new Vector2(120f, 20f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
-        UIFactory.Bar(p, "XpBar", new Vector2(44f, 128f), new Vector2(XpW, XpH),
+        UIFactory.Bar(p, "XpBar", new Vector2(44f, 152f), new Vector2(XpW, XpH),
             new Color(0.35f, 0.90f, 0.62f), out xpFill);
 
-        ultLabel = UIFactory.Label(p, "ULTIMATE  (Q)", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 104f),
+        ultLabel = UIFactory.Label(p, "ULTIMATE  (Q)", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 126f),
             new Vector2(340f, 20f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
         RectTransform chargeRt;
-        UIFactory.Bar(p, "ChargeBar", new Vector2(44f, 80f), new Vector2(XpW, XpH),
+        UIFactory.Bar(p, "ChargeBar", new Vector2(44f, 104f), new Vector2(XpW, XpH),
             new Color(0.45f, 0.92f, 1f), out chargeRt);
         chargeFill = chargeRt;
 
         levelText = UIFactory.Label(p, "LV 1", Vector2.zero, Vector2.zero, Vector2.zero,
-            new Vector2(300f, 34f), new Vector2(200f, 30f), 24, UIFactory.Accent2, TextAnchor.LowerLeft, true);
+            new Vector2(44f, 72f), new Vector2(200f, 30f), 24, UIFactory.Accent2, TextAnchor.LowerLeft, true);
+
+        // kesiapan dash (jeda 1,5 detik)
+        dashText = UIFactory.Label(p, "DASH", Vector2.zero, Vector2.zero, Vector2.zero,
+            new Vector2(300f, 72f), new Vector2(164f, 30f), 19, UIFactory.TextDim, TextAnchor.LowerRight, true);
 
         // indikator combo (bunuh beruntun)
         comboText = UIFactory.Label(p, "", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
-            new Vector2(30f, -276f), new Vector2(420f, 46f), 34,
+            new Vector2(30f, -266f), new Vector2(420f, 38f), 32,
             new Color(1f, 0.78f, 0.3f, 0f), TextAnchor.UpperLeft, true);
 
-        // panel kanan atas (timer / musuh / tier)
-        UIFactory.Image("StatsCard", p, new Color(0.05f, 0.07f, 0.11f, 0.72f),
-            Vector2.one, Vector2.one, Vector2.one, new Vector2(-18f, -18f), new Vector2(300f, 164f));
+        // sisa waktu buff aktif (Overdrive / Shield)
+        buffText = UIFactory.Label(p, "", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(30f, -306f), new Vector2(680f, 34f), 19,
+            new Color(1f, 1f, 1f, 0f), TextAnchor.UpperLeft, true);
+
+        // teks besar "LEVEL UP!" (muncul sebentar)
+        levelUpText = UIFactory.Label(p, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 150f), new Vector2(900f, 90f), 66,
+            new Color(1f, 0.92f, 0.45f, 0f), TextAnchor.MiddleCenter, true);
+
+        // ---- panel kanan atas: timer / musuh / tier / boss berikutnya ----
+        UIFactory.Image("StatsCard", p, new Color(0.05f, 0.07f, 0.11f, 0.78f),
+            Vector2.one, Vector2.one, Vector2.one, new Vector2(-18f, -18f), new Vector2(300f, 196f));
+        UIFactory.Image("StatsCardTop", p, UIFactory.Accent2,
+            Vector2.one, Vector2.one, Vector2.one, new Vector2(-18f, -18f), new Vector2(300f, 4f));
 
         timerText = UIFactory.Label(p, "00:00", Vector2.one, Vector2.one, Vector2.one,
             new Vector2(-30f, -30f), new Vector2(260f, 46f), 40, UIFactory.TextMain, TextAnchor.UpperRight, true);
@@ -176,6 +219,9 @@ public class UIManager : MonoBehaviour
             new Vector2(-30f, -80f), new Vector2(260f, 30f), 22, UIFactory.TextDim, TextAnchor.UpperRight);
         tierText = UIFactory.Label(p, "TIER 1", Vector2.one, Vector2.one, Vector2.one,
             new Vector2(-30f, -116f), new Vector2(260f, 30f), 22, UIFactory.Accent, TextAnchor.UpperRight, true);
+        bossTimerText = UIFactory.Label(p, "", Vector2.one, Vector2.one, Vector2.one,
+            new Vector2(-30f, -150f), new Vector2(260f, 28f), 20,
+            new Color(1f, 0.62f, 0.55f), TextAnchor.UpperRight, true);
 
         hintTextPlaceholder(p);
 
@@ -187,7 +233,7 @@ public class UIManager : MonoBehaviour
 
     void hintTextPlaceholder(Transform p)
     {
-        UIFactory.Label(p, "WASD / panah untuk bergerak  •  ESC untuk pause",
+        hintText = UIFactory.Label(p, "WASD / panah untuk bergerak  •  ESC untuk pause",
             new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
             new Vector2(0f, -26f), new Vector2(900f, 30f), 20, new Color(1f, 1f, 1f, 0.35f), TextAnchor.UpperCenter);
     }
@@ -285,8 +331,14 @@ public class UIManager : MonoBehaviour
         var cardRt = UIFactory.Rect("WeaponPanel", c, new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(0f, 1f), new Vector2(24f, -24f), new Vector2(340f, 230f));
         var bg = cardRt.gameObject.AddComponent<Image>();
-        bg.color = new Color(0.05f, 0.07f, 0.11f, 0.75f);
+        bg.color = new Color(0.05f, 0.07f, 0.11f, 0.78f);
         bg.raycastTarget = false;
+
+        // garis aksen atas — supaya gaya panel seragam dengan panel HUD lainnya
+        var stripe = UIFactory.Image("PanelTop", cardRt, UIFactory.Accent2,
+            new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f),
+            Vector2.zero, new Vector2(0f, 4f));
+        stripe.raycastTarget = false;
 
         UIFactory.Label(cardRt, "SENJATA", new Vector2(0f, 1f), new Vector2(0f, 1f),
             new Vector2(0f, 1f), new Vector2(16f, -10f), new Vector2(310f, 30f), 22,
@@ -305,8 +357,10 @@ public class UIManager : MonoBehaviour
         damageFlash = UIFactory.FullPanel(c, "DamageFlash", new Color(0.85f, 0.06f, 0.09f, 0f));
         damageFlash.raycastTarget = false;
 
-        // peringatan HP rendah (berdenyut di tepi layar)
-        lowHp = UIFactory.FullPanel(c, "LowHpWarn", new Color(0.80f, 0.05f, 0.08f, 0f));
+        // peringatan HP rendah: vignette di TEPI layar saja (bukan seluruh layar)
+        lowHp = UIFactory.FullPanel(c, "LowHpWarn", new Color(0.85f, 0.05f, 0.10f, 0f));
+        lowHp.sprite = UIFactory.Vignette;
+        lowHp.type = Image.Type.Simple;
         lowHp.raycastTarget = false;
     }
 
@@ -693,6 +747,23 @@ public class UIManager : MonoBehaviour
                 Application.Quit();
             });
 
+        // latar animasi: titik-titik melayang pelan (tidak menghalangi klik)
+        menuFxRoot = UIFactory.Rect("MenuFx", menuRoot.transform,
+            Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f), Vector2.zero, Vector2.zero);
+        menuFx.Clear(); menuFxDir.Clear();
+        for (int k = 0; k < 30; k++)
+        {
+            var dot = UIFactory.Image("Dot", menuFxRoot,
+                new Color(0.55f, 0.90f, 1f, UnityEngine.Random.Range(0.07f, 0.26f)),
+                new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+                new Vector2(UnityEngine.Random.Range(-950f, 950f), UnityEngine.Random.Range(-520f, 520f)),
+                new Vector2(UnityEngine.Random.Range(3f, 10f), UnityEngine.Random.Range(3f, 10f)));
+            dot.sprite = SpriteFactory.Circle;
+            dot.raycastTarget = false;
+            menuFx.Add(dot.rectTransform);
+            menuFxDir.Add(new Vector2(UnityEngine.Random.Range(-0.3f, 0.3f), UnityEngine.Random.Range(0.15f, 0.55f)));
+        }
+
         UIFactory.Label(menuRoot.transform, "Dibuat oleh Mentor Divisi Game Dev  •  Study Group SEA GEN 11",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
             new Vector2(0f, 78f), new Vector2(1700f, 34f), 22, UIFactory.Accent2, TextAnchor.MiddleCenter, true);
@@ -708,7 +779,7 @@ public class UIManager : MonoBehaviour
         var bg = UIFactory.FullPanel(c, "SettingsRoot", new Color(0.02f, 0.03f, 0.06f, 0.92f));
         settingsRoot = bg.gameObject;
 
-        var card = UIFactory.Card(settingsRoot.transform, "Card", Vector2.zero, new Vector2(900f, 940f),
+        var card = UIFactory.Card(settingsRoot.transform, "Card", Vector2.zero, new Vector2(900f, 1000f),
             new Color(0.20f, 0.78f, 0.72f, 1f));
 
         UIFactory.Label(card, "PENGATURAN", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
@@ -741,29 +812,50 @@ public class UIManager : MonoBehaviour
             new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(780f, 30f), 24,
             UIFactory.Accent2, TextAnchor.LowerLeft, true);
 
-        screenBtn = UIFactory.TextButton(card, ScreenSetup.Label(), new Vector2(-150f, -50f),
-            new Vector2(380f, 60f), 26,
+        screenBtn = UIFactory.TextButton(card, ScreenSetup.Label(), new Vector2(-230f, -50f),
+            new Vector2(360f, 60f), 24,
             () => { ScreenSetup.Cycle(); SetButtonText(screenBtn, ScreenSetup.Label()); });
 
-        UIFactory.Label(card, "layar penuh / resolusi",
+        uiScaleBtn = UIFactory.TextButton(card, "UI  " + UiScale.Label(), new Vector2(150f, -50f),
+            new Vector2(340f, 60f), 24,
+            () => { UiScale.Cycle(); ApplyUiScale(); SetButtonText(uiScaleBtn, "UI  " + UiScale.Label()); });
+
+        UIFactory.Label(card, "layar penuh / resolusi                ukuran UI (untuk proyektor)",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(215f, -50f), new Vector2(340f, 30f), 19, UIFactory.TextDim, TextAnchor.MiddleLeft);
+            new Vector2(0f, -92f), new Vector2(800f, 26f), 17, UIFactory.TextDim, TextAnchor.LowerLeft);
 
         // ---------------- TOMBOL (REMAP) ----------------
         UIFactory.Label(card, "TOMBOL", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, -115f), new Vector2(780f, 30f), 24,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, -150f), new Vector2(780f, 30f), 24,
             UIFactory.Accent2, TextAnchor.LowerLeft, true);
         UIFactory.Label(card, "klik tombolnya, lalu tekan tombol baru  (Esc = batal)",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0f, -145f), new Vector2(780f, 24f), 17, UIFactory.TextDim, TextAnchor.LowerLeft);
+            new Vector2(0f, -178f), new Vector2(780f, 24f), 17, UIFactory.TextDim, TextAnchor.LowerLeft);
 
-        MakeKeyButton(card, GameAction.Dash, new Vector2(-215f, -200f));
-        MakeKeyButton(card, GameAction.Ultimate, new Vector2(215f, -200f));
-        MakeKeyButton(card, GameAction.Pause, new Vector2(-215f, -275f));
-        MakeKeyButton(card, GameAction.Mute, new Vector2(215f, -275f));
+        MakeKeyButton(card, GameAction.Dash, new Vector2(-215f, -245f));
+        MakeKeyButton(card, GameAction.Ultimate, new Vector2(215f, -245f));
+        MakeKeyButton(card, GameAction.Pause, new Vector2(-215f, -318f));
+        MakeKeyButton(card, GameAction.Mute, new Vector2(215f, -318f));
 
-        UIFactory.TextButton(card, "KEMBALI", new Vector2(0f, -380f), new Vector2(320f, 68f), 28,
+        UIFactory.TextButton(card, "RESET KE BAWAAN", new Vector2(0f, -390f), new Vector2(400f, 56f), 22,
+            () =>
+            {
+                Keybinds.ResetAll();
+                foreach (var kv in keyButtons)
+                    SetButtonText(kv.Value, Keybinds.Name(kv.Key) + ":  " + Keybinds.Label(kv.Key));
+            });
+
+        UIFactory.TextButton(card, "KEMBALI", new Vector2(0f, -460f), new Vector2(320f, 68f), 28,
             () => { var r = settingsReturn; ShowSettings(false); r?.Invoke(); });
+    }
+
+    // Ukuran UI: kecilkan resolusi acuan canvas supaya semua elemen membesar.
+    void ApplyUiScale()
+    {
+        if (scaler == null) scaler = GetComponentInParent<CanvasScaler>();
+        if (scaler == null) return;
+        float f = Mathf.Max(0.1f, UiScale.Factor);
+        scaler.referenceResolution = new Vector2(1920f / f, 1080f / f);
     }
 
     void MakeKeyButton(Transform card, GameAction action, Vector2 pos)
@@ -840,21 +932,31 @@ public class UIManager : MonoBehaviour
         var bg = UIFactory.FullPanel(c, "PauseRoot", new Color(0.02f, 0.03f, 0.06f, 0.85f));
         pauseRoot = bg.gameObject;
 
-        var card = UIFactory.Card(pauseRoot.transform, "Card", Vector2.zero, new Vector2(700f, 480f),
+        var card = UIFactory.Card(pauseRoot.transform, "Card", Vector2.zero, new Vector2(820f, 800f),
             new Color(0.20f, 0.78f, 0.72f, 1f));
 
         UIFactory.Label(card, "PAUSE", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 160f), new Vector2(640f, 70f), 56,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 330f), new Vector2(760f, 70f), 56,
             UIFactory.TextMain, TextAnchor.MiddleCenter, true);
         UIFactory.Label(card, "Tekan ESC untuk lanjut", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 100f), new Vector2(640f, 30f), 22,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 272f), new Vector2(760f, 30f), 22,
             UIFactory.TextDim, TextAnchor.MiddleCenter);
 
-        UIFactory.TextButton(card, "LANJUT", new Vector2(0f, 10f), new Vector2(420f, 68f), 28,
+        // ringkasan permainan saat ini
+        var psBg = UIFactory.Image("PauseStatsBg", card, new Color(0.03f, 0.05f, 0.09f, 0.75f),
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0f, 90f), new Vector2(720f, 240f));
+        psBg.raycastTarget = false;
+
+        pauseStats = UIFactory.Label(card, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 90f), new Vector2(680f, 220f), 24,
+            UIFactory.TextMain, TextAnchor.MiddleCenter);
+
+        UIFactory.TextButton(card, "LANJUT", new Vector2(0f, -140f), new Vector2(420f, 68f), 28,
             () => GameManager.Instance.TogglePause());
-        UIFactory.TextButton(card, "PENGATURAN", new Vector2(0f, -76f), new Vector2(420f, 60f), 24,
+        UIFactory.TextButton(card, "PENGATURAN", new Vector2(0f, -222f), new Vector2(420f, 60f), 24,
             () => { ShowPause(false); settingsReturn = () => { ShowSettings(false); ShowPause(true); }; ShowSettings(true); });
-        UIFactory.TextButton(card, "MENU UTAMA", new Vector2(0f, -150f), new Vector2(420f, 60f), 24,
+        UIFactory.TextButton(card, "MENU UTAMA", new Vector2(0f, -296f), new Vector2(420f, 60f), 24,
             () => GameManager.Instance.ReturnToMenu());
 
         pauseRoot.SetActive(false);
@@ -961,9 +1063,17 @@ public class UIManager : MonoBehaviour
 
     // =====================================================================
     public void ShowMenu(bool on) { if (menuRoot != null) menuRoot.SetActive(on); }
-    public void ShowHud(bool on) { if (hudRoot != null) hudRoot.SetActive(on); }
+    public void ShowHud(bool on)
+    {
+        if (hudRoot != null) hudRoot.SetActive(on);
+        if (on) { hintT = 0f; hpLagRatio = 1f; comboPulse = 0f; lastCombo = 0; }
+    }
     public void ShowSettings(bool on) { if (settingsRoot != null) settingsRoot.SetActive(on); }
-    public void ShowPause(bool on) { if (pauseRoot != null) pauseRoot.SetActive(on); }
+    public void ShowPause(bool on)
+    {
+        if (pauseRoot != null) pauseRoot.SetActive(on);
+        if (on) RefreshPauseStats();
+    }
     public void ShowGameOver(bool on) { if (gameOverRoot != null) gameOverRoot.SetActive(on); }
 
     public void ShowLeaderboard(bool on)
@@ -1012,14 +1122,62 @@ public class UIManager : MonoBehaviour
         if (saveButton != null) saveButton.gameObject.SetActive(false);
         if (nameField != null) nameField.gameObject.SetActive(false);
 
+        // tandai baris yang baru saja dimasukkan
+        myName = string.IsNullOrEmpty(nm) ? "Pemain" : nm.Trim();
+        myScore = pendingScore;
+
         RefreshBoards();
     }
 
     void RefreshBoards()
     {
-        string text = Leaderboard.Format(10);
+        string text = Leaderboard.Format(10, myName, myScore);
         if (boardText != null) boardText.text = "— 10 BESAR —\n" + text;
         if (bigBoardText != null) bigBoardText.text = text;
+    }
+
+    // Dipanggil saat naik level: teks besar "LEVEL UP!" di tengah layar.
+    public void ShowLevelUp(int level)
+    {
+        if (levelUpText == null) return;
+        levelUpText.text = "LEVEL UP!   LV " + level;
+        levelUpT = 1.2f;
+    }
+
+    // Ringkasan saat jeda (pause).
+    void RefreshPauseStats()
+    {
+        if (pauseStats == null) return;
+        var gm = GameManager.Instance;
+        if (gm == null) return;
+
+        int secs = Mathf.FloorToInt(gm.TimeAlive);
+        string time = (secs / 60).ToString("00") + ":" + (secs % 60).ToString("00");
+
+        var sb = new System.Text.StringBuilder();
+        sb.Append("Skor  ").Append(gm.Score).Append("        Waktu  ").Append(time).Append('\n');
+        sb.Append("Musuh  ").Append(gm.Kills)
+          .Append("        Boss  ").Append(gm.BossKills)
+          .Append("        Tier  ").Append(gm.Tier).Append('\n');
+
+        var p = gm.Player;
+        if (p != null && p.Stats != null)
+            sb.Append("Level  ").Append(p.Stats.Level).Append('\n');
+
+        if (p != null && p.Weapons != null)
+        {
+            var ws = p.Weapons.weapons;
+            sb.Append("Senjata: ");
+            if (ws == null || ws.Count == 0) sb.Append("-");
+            else
+                for (int i = 0; i < ws.Count; i++)
+                {
+                    if (i > 0) sb.Append(", ");
+                    sb.Append(ws[i].DisplayName).Append(" Lv").Append(ws[i].Level);
+                }
+        }
+
+        pauseStats.text = sb.ToString();
     }
 
     public void ShowUpgrades(List<UpgradeDef> ups, Action done)
@@ -1061,6 +1219,22 @@ public class UIManager : MonoBehaviour
                 if (Keybinds.TryCapture(out k)) { Keybinds.Set(capturing.Value, k); FinishCapture(); }
             }
             return;   // jangan proses UI lain saat menunggu tombol
+        }
+
+        // ---- latar menu beranimasi (titik melayang) ----
+        if (menuRoot != null && menuRoot.activeInHierarchy && menuFx.Count > 0)
+        {
+            for (int i = 0; i < menuFx.Count; i++)
+            {
+                var frt = menuFx[i];
+                if (frt == null) continue;
+
+                Vector2 fp = frt.anchoredPosition + menuFxDir[i] * (60f * Time.unscaledDeltaTime);
+                if (fp.y > 540f) { fp.y = -540f; fp.x = UnityEngine.Random.Range(-950f, 950f); }
+                if (fp.x > 960f) fp.x = -960f;
+                else if (fp.x < -960f) fp.x = 960f;
+                frt.anchoredPosition = fp;
+            }
         }
 
         var gm = GameManager.Instance;
@@ -1170,14 +1344,116 @@ public class UIManager : MonoBehaviour
             }
         }
 
-        // peringatan HP rendah (berdenyut)
+        // peringatan HP rendah (berdenyut, hanya di tepi layar)
         if (lowHp != null && player.Health != null)
         {
             float ratio = player.Health.Max <= 0f ? 1f : player.Health.Current / player.Health.Max;
-            float target = ratio < 0.3f ? 0.08f + 0.09f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 3.5f)) : 0f;
+            float target = ratio < 0.3f ? 0.35f + 0.30f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 3.5f)) : 0f;
             var lc = lowHp.color;
-            lc.a = Mathf.MoveTowards(lc.a, target, 0.6f * Time.unscaledDeltaTime);
+            lc.a = Mathf.MoveTowards(lc.a, target, 0.9f * Time.unscaledDeltaTime);
             lowHp.color = lc;
+        }
+
+        // ---- kesiapan dash ----
+        if (dashText != null)
+        {
+            if (player.DashReady)
+            {
+                dashText.text = "DASH  SIAP";
+                dashText.color = new Color(0.55f, 0.95f, 1f);
+            }
+            else
+            {
+                dashText.text = "DASH  " + player.DashCooldownLeft.ToString("0.0") + "s";
+                dashText.color = new Color(0.45f, 0.48f, 0.58f);
+            }
+        }
+
+        // ---- sisa waktu buff (Overdrive / Shield) ----
+        if (buffText != null && player.Stats != null)
+        {
+            float od = player.Stats.overdriveUntil - Time.time;
+            float sh = player.Stats.shieldUntil - Time.time;
+            if (od > 0f || sh > 0f)
+            {
+                var sb = new System.Text.StringBuilder();
+                if (od > 0f) sb.Append("<color=#FFD34D>OVERDRIVE ").Append(od.ToString("0.0")).Append("s</color>");
+                if (od > 0f && sh > 0f) sb.Append("        ");
+                if (sh > 0f) sb.Append("<color=#8DEBFF>SHIELD ").Append(sh.ToString("0.0")).Append("s</color>");
+                buffText.text = sb.ToString();
+                var bc = buffText.color; bc.a = 1f; buffText.color = bc;
+            }
+            else
+            {
+                var bc = buffText.color;
+                bc.a = Mathf.MoveTowards(bc.a, 0f, 3f * Time.unscaledDeltaTime);
+                buffText.color = bc;
+            }
+        }
+
+        // ---- bayangan damage di bar HP (menyusut pelan) ----
+        if (hpLagRt != null && player.Health != null)
+        {
+            float ratio = player.Health.Max <= 0f ? 0f : Mathf.Clamp01(player.Health.Current / player.Health.Max);
+            if (ratio > hpLagRatio) hpLagRatio = ratio;                       // heal langsung ikut
+            else hpLagRatio = Mathf.Max(ratio, hpLagRatio - 0.5f * Time.unscaledDeltaTime);
+
+            hpLagRt.anchoredPosition = new Vector2(44f + ratio * HpW, 199f);
+            hpLagRt.sizeDelta = new Vector2(Mathf.Max(0f, (hpLagRatio - ratio) * HpW), HpH - 6f);
+        }
+
+        // ---- hitungan mundur menuju boss ----
+        if (bossTimerText != null)
+        {
+            var sp = gm.Spawner;
+            if (sp != null && !sp.BossAliveNow)
+            {
+                float bt = sp.SecondsToBoss;
+                bossTimerText.text = "BOSS  " + Mathf.CeilToInt(bt) + "s";
+                bossTimerText.color = bt <= 10f
+                    ? Color.Lerp(new Color(1f, 0.35f, 0.30f), Color.white, 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 9f))
+                    : new Color(1f, 0.62f, 0.55f);
+            }
+            else
+            {
+                bossTimerText.text = "BOSS  MUNCUL!";
+                bossTimerText.color = new Color(1f, 0.35f, 0.30f);
+            }
+        }
+
+        // ---- petunjuk di atas memudar setelah beberapa detik ----
+        if (playing) hintT += Time.unscaledDeltaTime;
+        if (hintText != null)
+        {
+            float target = (playing && hintT > 6f) ? 0f : 0.35f;
+            var hc = hintText.color;
+            hc.a = Mathf.MoveTowards(hc.a, target, 0.6f * Time.unscaledDeltaTime);
+            hintText.color = hc;
+        }
+
+        // ---- animasi "LEVEL UP!" ----
+        if (levelUpT > 0f)
+        {
+            levelUpT -= Time.unscaledDeltaTime;
+            float k = Mathf.Clamp01(levelUpT / 1.2f);
+            if (levelUpText != null)
+            {
+                var c = levelUpText.color;
+                c.a = Mathf.Sin(k * Mathf.PI);                       // muncul lalu memudar
+                levelUpText.color = c;
+                levelUpText.rectTransform.localScale =
+                    Vector3.one * Mathf.Lerp(1.5f, 1f, 1f - k);
+            }
+        }
+
+        // ---- combo "pop" saat bertambah ----
+        if (gm.Combo > lastCombo) { comboPulse = 1f; lastCombo = gm.Combo; }
+        else if (gm.Combo == 0) lastCombo = 0;
+
+        if (comboText != null)
+        {
+            if (comboPulse > 0f) comboPulse = Mathf.Max(0f, comboPulse - Time.unscaledDeltaTime * 3.5f);
+            comboText.rectTransform.localScale = Vector3.one * (1f + 0.30f * comboPulse);
         }
 
         int min = Mathf.FloorToInt(gm.TimeAlive / 60f);
@@ -1262,8 +1538,20 @@ public class UIManager : MonoBehaviour
         if (boss == null) { if (bossRoot.activeSelf) bossRoot.SetActive(false); return; }
 
         if (!bossRoot.activeSelf) bossRoot.SetActive(true);
-        if (bossName != null) bossName.text = boss.DisplayName;
+
+        // boss ELITE (punya 2 serangan) dibedakan warnanya
+        bool elite = boss.IsElite;
+        if (bossName != null)
+        {
+            bossName.text = elite ? "ELITE  —  " + boss.DisplayName : boss.DisplayName;
+            bossName.color = elite ? new Color(1f, 0.45f, 0.95f) : new Color(1f, 0.58f, 0.52f);
+        }
         if (bossFill != null && boss.Health != null)
+        {
             UIFactory.SetBarFill(bossFill, boss.Health.Max <= 0f ? 0f : boss.Health.Current / boss.Health.Max, 900f, 26f);
+            var fImg = bossFill.GetComponent<Image>();
+            if (fImg != null)
+                fImg.color = elite ? new Color(0.82f, 0.28f, 0.95f) : new Color(0.95f, 0.30f, 0.32f);
+        }
     }
 }
