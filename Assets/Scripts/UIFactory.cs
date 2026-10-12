@@ -25,24 +25,59 @@ public static class UIFactory
         _gradientH = null;
     }
 
+    // Karakter yang WAJIB ada di font UI: titik level (•), tanda pisah (—), tanda kali (×).
+    static readonly char[] RequiredGlyphs = { '•', '—', '×' };
+
+    // Font utama:
+    //  1) font bawaan project -> Rajdhani (SIL Open Font License) — AMAN untuk dipublikasikan
+    //     karena file fontnya ikut di dalam build, bukan memakai font sistem.
+    //  2) cadangan: font sistem Windows, hanya kalau font bawaan tidak ada / glyph pentingnya kurang.
     public static Font UIFont
     {
         get
         {
             if (_font == null)
             {
-                // font "futuristik/retro" bawaan Windows (tanpa perlu download)
-                try
+                _font = LoadProjectFont("Fonts/Rajdhani-SemiBold")
+                     ?? LoadProjectFont("Fonts/Rajdhani-Regular")
+                     ?? LoadProjectFont("Fonts/Rajdhani-Bold");
+
+                if (!HasRequiredGlyphs(_font))
                 {
-                    _font = Font.CreateDynamicFontFromOSFont(
-                        new[] { "Bahnschrift", "Consolas", "Cascadia Mono", "Segoe UI", "Tahoma", "Arial" }, 32);
+                    var os = TryOSFont(new[] { "Bahnschrift", "Consolas", "Cascadia Mono", "Segoe UI", "Tahoma", "Arial" });
+                    if (os != null) _font = os;
                 }
-                catch { }
+
                 if (_font == null) { try { _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch { } }
                 if (_font == null) { try { _font = Resources.GetBuiltinResource<Font>("Arial.ttf"); } catch { } }
             }
             return _font;
         }
+    }
+
+    static Font LoadProjectFont(string path)
+    {
+        try { return Resources.Load<Font>(path); }
+        catch { return null; }
+    }
+
+    static Font TryOSFont(string[] names)
+    {
+        try { return Font.CreateDynamicFontFromOSFont(names, 32); }
+        catch { return null; }
+    }
+
+    // Pastikan font punya glyph yang dipakai UI (kalau tidak, nanti muncul kotak/silang).
+    static bool HasRequiredGlyphs(Font f)
+    {
+        if (f == null) return false;
+        try
+        {
+            for (int i = 0; i < RequiredGlyphs.Length; i++)
+                if (!f.HasCharacter(RequiredGlyphs[i])) return false;
+            return true;
+        }
+        catch { return true; }
     }
 
     // Garis tepi gelap di teks supaya lebih tajam/jelas (gaya game arcade).

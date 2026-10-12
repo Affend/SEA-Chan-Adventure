@@ -1114,6 +1114,11 @@ public class UIManager : MonoBehaviour
         string nm = nameField != null ? nameField.text : "";
         int rank = Leaderboard.Add(nm, pendingScore, pendingKills, pendingBosses, pendingTime);
 
+        // tandai baris yang baru saja dimasukkan (highlight di papan skor)
+        myName = string.IsNullOrEmpty(nm) ? "Pemain" : nm.Trim();
+        if (myName.Length > 14) myName = myName.Substring(0, 14);
+        myScore = pendingScore;
+
         if (boardHint != null)
             boardHint.text = rank == 0
                 ? "Rekor baru! Kamu peringkat #1"
@@ -1121,10 +1126,6 @@ public class UIManager : MonoBehaviour
 
         if (saveButton != null) saveButton.gameObject.SetActive(false);
         if (nameField != null) nameField.gameObject.SetActive(false);
-
-        // tandai baris yang baru saja dimasukkan
-        myName = string.IsNullOrEmpty(nm) ? "Pemain" : nm.Trim();
-        myScore = pendingScore;
 
         RefreshBoards();
     }

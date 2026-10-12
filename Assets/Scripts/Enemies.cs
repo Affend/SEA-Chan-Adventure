@@ -698,7 +698,7 @@ public class EnemySpawner : MonoBehaviour
         var sr = SpriteFactory.NewSprite("Enemy", GameBootstrap.WorldRoot, tint, true, 8,
             EdgePosition(), 1f);
         var e = sr.gameObject.AddComponent<Enemy>();
-        e.Configure(player, hp, spd, dmg, 0.35f, 3, false, def, tint);
+        e.Configure(player, hp, spd, dmg, 0.35f, 4, false, def, tint);
     }
 
     // Kombinasi serangan kedua untuk boss cutscene (selalu beda dari yang utama).

@@ -300,10 +300,54 @@ pilihan gratis yang paling praktis:
 Rancangan paling aman: **skor resmi tetap dari Cara 2** (papan "Hall of Fame" yang kamu kendalikan),
 dan skor pemain pakai layanan online di atas kalau memang perlu kompetisi antar pemain.
 
-## Kredit
+### Papan skor saat ini
 
-- **Dibuat oleh: Mentor Divisi Game Dev** — Study Group SEA GEN 11.
-- Karakter **SEA Chan**, kode, UI, robot, dan efek dibuat untuk keperluan *showcase* Study Group Game Development.
+Papan skor **hanya berisi skor pemain** (10 besar, tersimpan di komputer itu) — jadi murni kompetisi antar peserta yang mencoba di PC/PC yang sama. Di menu utama tampil **"Rekor tertinggi: N"**.
+
+Fitur **skor resmi** (`leaderboard.json`) tetap ada tetapi **dikosongkan** (`"items": []`), jadi tidak ada baris `[RESMI]` yang muncul. Kalau nanti ingin menambahkan patokan skor (misal rekor panitia), cukup isi kembali file itu lalu build ulang:
+
+```json
+{ "items": [ { "name": "MENTOR", "score": 18000, "kills": 500, "bosses": 5, "time": 540 } ] }
+```
+
+## Kredit (untuk publikasi itch.io)
+
+**Game & aset: dibuat oleh "Mentor Divisi Game Dev" — Study Group SEA GEN 11.**
+
+| Bagian | Berkas | Sumber | Lisensi |
+|---|---|---|---|
+| Karakter **SEA Chan** | `Resources/SEAChan/seachan_front_*`, `seachan_side_*` | Gambar AI buatan sendiri (Gemini), dipotong jadi frame animasi | Milik pembuat |
+| Artwork menu utama | `Resources/UI/menu_art.png` | Gambar AI buatan sendiri (Stable Diffusion) | Milik pembuat |
+| Robot musuh (6) | `Resources/Monsters/robot_00_drone` … `robot_05_hybrid` | Dibuat sendiri (digambar lewat skrip) | Milik pembuat |
+| Boss (3) | `Monsters/boss_0_mech`, `boss_1_brainbot`, `boss_2_spidertank` | Dibuat sendiri | Milik pembuat |
+| Boss ELITE / cutscene (3) | `Monsters/boss_3_elite_warframe`…`boss_5_elite_observer` | Dibuat sendiri | Milik pembuat |
+| Lantai & dinding | `Resources/Environment/floor_block_*`, `wall_block_*` | Dibuat sendiri | Milik pembuat |
+| Dekorasi | `Resources/Props/prop_*` (7 buah) | Dibuat sendiri | Milik pembuat |
+| Musik (4 track) | `Resources/Audio/bgm_menu`, `bgm_game`, `bgm_boss`, `bgm_defeat` | Disintesis sendiri lewat skrip | Milik pembuat |
+| Efek suara (9) | `Resources/Audio/hit, hurt, pickup, shoot, laser, levelup, boss, gameover, ui_click` | Disintesis sendiri lewat skrip | Milik pembuat |
+| Kode, gameplay, UI | `Assets/Scripts/*` | Dibuat sendiri | Milik pembuat |
+| **Font UI** | `Resources/Fonts/Rajdhani-Regular/SemiBold/Bold.ttf` | **Rajdhani** — Indian Type Foundry | **SIL Open Font License 1.1** (boleh dipakai komersial) |
+| Game engine | — | **Unity 6** (Unity Technologies) | Sesuai lisensi Unity |
+
+- **Tidak ada aset pihak ketiga** di dalam game ini.
+- **Tidak memakai aset dari project `SG-GameDev11`** — semua dibuat khusus untuk showcase ini.
+
+### Catatan lisensi sebelum publish (penting dibaca)
+
+1. **Font UI — SUDAH AMAN.** Game memakai font **Rajdhani** (SIL Open Font License 1.1, © Indian Type Foundry) yang **file-nya ikut di dalam build** (`Assets/Resources/Fonts/`), jadi **tidak lagi memakai font sistem Windows** dan aman untuk dipublikasikan/dijual.
+   - Syarat OFL: sertakan file lisensinya — sudah tersedia di **`Assets/Resources/Fonts/OFL.txt`** (ikut ter-bundle saat build).
+   - Mau ganti font lain? Taruh `.ttf`-nya di `Assets/Resources/Fonts/`, lalu ubah nama di `UIFactory.cs` → `LoadProjectFont("Fonts/NamaFont")`.
+   - Kalau file font tidak ditemukan atau ada karakter penting yang tidak ada di font itu, game **otomatis** kembali memakai font sistem (tidak error).
+2. **Unity Personal.** Jika memakai lisensi Unity Personal, **splash screen Unity wajib tampil** (jangan dimatikan) — ini syarat lisensinya.
+3. **Aset gratis tambahan** (kalau nanti dipakai). Tulis sumber & lisensinya di tabel di atas. Sumber aman: **Kenney (CC0)**, **OpenGameArt**, **itch.io** (baca lisensi tiap pack). Aset **CC-BY** wajib mencantumkan nama pembuatnya.
+
+### Cara build & upload ke itch.io (Windows .exe)
+
+1. Di Unity: **`File > Build Settings`**, pastikan `Assets/Scenes/Main.unity` ada di daftar, target **Windows** (x86_64), lalu **Build** — atau pakai menu praktis **`SEA Chan > 4. Build dan Run (Windows)`**.
+2. Hasil build ada di folder **`Build/`** — isinya: `SEAChanAdventure.exe` + folder `SEAChanAdventure_Data/` + `UnityPlayer.dll` + `MonoBleedingEdge/`.
+3. **Zip SELURUH isi folder `Build/`** (bukan hanya file `.exe`, nanti error).
+4. Di itch.io: buat project baru → **Kind of project = Downloadable** → upload ZIP itu → centang **"This file will be played in the browser" = TIDAK** (karena ini aplikasi .exe, bukan WebGL) → simpan.
+5. Cantumkan kredit di halaman itch.io dengan menyalin tabel di atas.
 
 ## Troubleshooting
 

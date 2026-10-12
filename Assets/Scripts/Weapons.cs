@@ -147,8 +147,8 @@ public class PlayerStats : MonoBehaviour
 {
     public int Level { get; private set; } = 1;
     public float XP { get; private set; }
-    public float XPToNext { get; private set; } = 14f;
-    public float XPGrowth = 1.28f;
+    public float XPToNext { get; private set; } = 12f;
+    public float XPGrowth = 1.25f;
 
     public float DamageBonus = 0f;
     public float CooldownReduction = 0f;
@@ -170,7 +170,7 @@ public class PlayerStats : MonoBehaviour
     {
         Level = 1;
         XP = 0f;
-        XPToNext = 14f;
+        XPToNext = 12f;
         invulnUntil = 0f;
         overdriveUntil = 0f;
         shieldUntil = 0f;
