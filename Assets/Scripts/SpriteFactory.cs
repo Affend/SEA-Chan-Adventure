@@ -15,6 +15,7 @@ public static class SpriteFactory
         _square = null;
         _gun = null;
         _health = null;
+        _arrow = null;
     }
 
     public static Sprite Circle
@@ -53,6 +54,47 @@ public static class SpriteFactory
             if (_health == null) _health = MakeHealth();
             return _health;
         }
+    }
+
+    static Sprite _arrow;
+    // Segitiga penunjuk arah (dipakai indikator boss di luar layar).
+    public static Sprite Arrow
+    {
+        get
+        {
+            if (_arrow == null) _arrow = MakeArrow();
+            return _arrow;
+        }
+    }
+
+    static Sprite MakeArrow()
+    {
+        int s = 32;
+        var tex = new Texture2D(s, s, TextureFormat.RGBA32, false);
+        tex.filterMode = FilterMode.Point;
+        tex.wrapMode = TextureWrapMode.Clamp;
+        var px = new Color32[s * s];
+        for (int i = 0; i < px.Length; i++) px[i] = new Color32(0, 0, 0, 0);
+
+        for (int y = 0; y < s; y++)
+        {
+            int w = Mathf.RoundToInt(Mathf.Lerp(1f, s * 0.42f, 1f - Mathf.Abs(y - s * 0.5f) / (s * 0.5f)));
+            for (int x = 0; x < w; x++) px[y * s + x] = new Color32(255, 255, 255, 255);
+        }
+        // garis tepi gelap
+        for (int y = 0; y < s; y++)
+            for (int x = 0; x < s; x++)
+                if (px[y * s + x].a > 0)
+                {
+                    bool edge = false;
+                    if (x + 1 < s && px[y * s + x + 1].a == 0) edge = true;
+                    if (y + 1 < s && px[(y + 1) * s + x].a == 0) edge = true;
+                    if (edge) px[y * s + x] = new Color32(24, 26, 34, 255);
+                }
+
+        tex.SetPixels32(px);
+        tex.Apply();
+        return Sprite.Create(tex, new Rect(0, 0, s, s), new Vector2(0.5f, 0.5f), s);
     }
 
     static Sprite Make(int size, bool round)

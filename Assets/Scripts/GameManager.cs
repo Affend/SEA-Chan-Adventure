@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public enum GameState { Intro, Menu, Playing, Paused, GameOver, UpgradeSelect }
+public enum GameState { Intro, Menu, Playing, Paused, GameOver, UpgradeSelect, Cutscene }
 
 // Mengatur alur permainan: menu utama, mulai main, pause, naik level, game over.
 public class GameManager : MonoBehaviour
@@ -18,8 +18,26 @@ public class GameManager : MonoBehaviour
     public float TimeAlive { get; private set; }
     public int Tier { get; private set; } = 1;
 
-    // Skor: musuh + bonus besar untuk Boss + waktu bertahan.
-    public int Score => Kills * 10 + BossKills * 500 + Mathf.FloorToInt(TimeAlive) * 2;
+    // --- combo (bunuh beruntun) & ultimate ---
+    public int Combo { get; private set; }
+    float comboTimer;
+    int bonusScore;
+    public float Charge { get; private set; }
+    public const float ChargeMax = 100f;
+
+    // Ultimate TIDAK bisa ditumpuk: setelah dipakai ada jeda cooldown
+    // dan selama cooldown meter tidak bisa terisi lagi.
+    public float UltimateCooldown { get; private set; }
+    public const float UltimateCooldownTime = 25f;
+    public bool UltimateLocked => UltimateCooldown > 0f;
+    public bool ChargeReady => Charge >= ChargeMax && !UltimateLocked;
+    // Berapa bagian meter yang terisi (0..1) — dipakai HUD.
+    public float ChargeRatio => UltimateLocked
+        ? 1f - Mathf.Clamp01(UltimateCooldown / UltimateCooldownTime)
+        : Mathf.Clamp01(Charge / ChargeMax);
+
+    // Skor: musuh + bonus boss + waktu + bonus combo.
+    public int Score => Kills * 10 + BossKills * 500 + Mathf.FloorToInt(TimeAlive) * 2 + bonusScore;
 
     void Awake()
     {
@@ -62,11 +80,52 @@ public class GameManager : MonoBehaviour
 
     void Update()
     {
-        if (State == GameState.Playing) TimeAlive += Time.deltaTime;
+        if (State == GameState.Playing)
+        {
+            TimeAlive += Time.deltaTime;
+
+            // combo memudar kalau tidak ada kill
+            if (Combo > 0)
+            {
+                comboTimer -= Time.deltaTime;
+                if (comboTimer <= 0f) Combo = 0;
+            }
+
+            if (UltimateCooldown > 0f) UltimateCooldown -= Time.deltaTime;
+
+            // ultimate: tekan Q kalau meter sudah penuh (dan tidak sedang cooldown)
+            if (ChargeReady && InputHelper.GetKeyDown(KeyCode.Q)) Unleash();
+        }
 
         if (InputHelper.GetKeyDown(KeyCode.Escape) &&
             (State == GameState.Playing || State == GameState.Paused))
             TogglePause();
+    }
+
+    // Ledakan energi: melukai musuh di sekitar player (bukan penghapus layar).
+    void Unleash()
+    {
+        Charge = 0f;
+        UltimateCooldown = UltimateCooldownTime;   // tidak bisa dipakai dua kali beruntun
+
+        float radius = 9f;
+        float dmg = 50f + Tier * 8f;
+
+        var list = Enemy.All;
+        for (int i = list.Count - 1; i >= 0; i--)
+        {
+            var e = list[i];
+            if (e == null) continue;
+            if (Vector2.Distance(e.transform.position, Player.transform.position) <= radius)
+                e.ApplyDamage(dmg);
+        }
+
+        AuraVisual.Spawn(Player.transform.position, radius, new Color(0.6f, 0.95f, 1f, 0.5f));
+        Burst.Spawn(Player.transform.position, new Color(0.7f, 1f, 1f), 30, 12f, 0.3f, 0.7f);
+        CameraFollow.DoShake(0.3f, 0.35f);
+        AudioManager.Play("laser", 0.9f);
+        AudioManager.Play("levelup", 0.8f);
+        if (UIManager.Instance != null) UIManager.Instance.ShowBanner("ENERGY BURST!");
     }
 
     // ------------------------------------------------------------- MULAI
@@ -81,6 +140,7 @@ public class GameManager : MonoBehaviour
         Time.timeScale = 1f;
 
         Kills = 0; BossKills = 0; TimeAlive = 0f; Tier = 1;
+        Combo = 0; comboTimer = 0f; bonusScore = 0; Charge = 0f; UltimateCooldown = 0f;
         Enemy.All.Clear();
         AudioManager.Track("bgm_game");
 
@@ -148,7 +208,14 @@ public class GameManager : MonoBehaviour
     }
 
     // ------------------------------------------------------------ SKOR
-    public void AddKill() { Kills++; }
+    public void AddKill()
+    {
+        Kills++;
+        Combo++;
+        comboTimer = 2f;
+        bonusScore += 10 * Mathf.Clamp(Combo / 5 + 1, 1, 10);   // makin banyak combo makin besar
+        if (UltimateCooldown <= 0f) Charge = Mathf.Min(ChargeMax, Charge + 1f);
+    }
 
     void OnLevelUp(int level)
     {
@@ -194,10 +261,25 @@ public class GameManager : MonoBehaviour
                 BossKills, Score);
     }
 
+    // Cutscene singkat saat boss khusus muncul (tingkat 3, 6, 9, ...).
+    // Kamera diarahkan ke lokasi boss supaya terlihat dia muncul di mana.
+    public void TriggerBossCutscene(Enemy boss)
+    {
+        if (State != GameState.Playing) return;
+        if (boss == null || UIManager.Instance == null) return;
+
+        State = GameState.Cutscene;
+        UIManager.Instance.PlayBossCutscene(boss.DisplayName, boss.transform, () =>
+        {
+            if (State == GameState.Cutscene) State = GameState.Playing;
+        });
+    }
+
     public void OnBossDefeated()
     {
         Tier++;
         BossKills++;
+        if (UltimateCooldown <= 0f) Charge = Mathf.Min(ChargeMax, Charge + 15f);
         AudioManager.Track("bgm_game");   // balik ke musik biasa setelah boss tumbang
         if (Spawner != null) Spawner.OnTierUp(Tier);
         if (UIManager.Instance != null)

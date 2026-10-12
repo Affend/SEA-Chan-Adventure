@@ -120,6 +120,28 @@ public static class GameTools
         }
     }
 
+    [MenuItem("SEA Chan/6. Buat Scene Authoring (gampang diedit)", false, 6)]
+    public static void CreateAuthoringScene()
+    {
+        if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
+        const string path = "Assets/Scenes/Authoring.unity";
+        var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+
+        // struktur game yang bisa diedit bebas di Hierarchy / Inspector
+        var world = GameBootstrap.BuildStructurePreview(null);
+        world.name = GameBootstrap.AuthoringRootName;
+        world.transform.SetParent(null);
+
+        if (!AssetDatabase.IsValidFolder("Assets/Scenes")) AssetDatabase.CreateFolder("Assets", "Scenes");
+        EditorSceneManager.SaveScene(scene, path);
+        AssetDatabase.Refresh();
+
+        Debug.Log("[SEA Chan] Scene authoring dibuat: " + path +
+                  " — tekan Play di scene INI. Nilai yang kamu ubah di Inspector " +
+                  "(Move Speed, Pickup Radius, Dash, posisi Player) akan dipakai game.");
+    }
+
     [MenuItem("SEA Chan/Tampilkan otomatis di Hierarchy", false, 20)]
     static void ToggleAuto()
     {

@@ -14,6 +14,7 @@ public class GameBootstrap : MonoBehaviour
 
     static GameObject root;
     static GameObject gameplay;
+    static PlayerController _authoringTemplate;
 
     public static Transform WorldRoot => gameplay != null ? gameplay.transform : null;
 
@@ -25,6 +26,7 @@ public class GameBootstrap : MonoBehaviour
         _self = null;
         root = null;
         gameplay = null;
+        _authoringTemplate = null;
     }
 
     public class GameplayRefs
@@ -32,6 +34,9 @@ public class GameBootstrap : MonoBehaviour
         public PlayerController player;
         public EnemySpawner spawner;
     }
+
+    // Root scene "authoring" (dibuat lewat menu editor) yang bisa diedit bebas.
+    public const string AuthoringRootName = "SEA Chan World (Authoring)";
 
     void Awake()
     {
@@ -54,7 +59,16 @@ public class GameBootstrap : MonoBehaviour
     {
         Time.timeScale = 1f;
 
-        // bersihkan sisa root/pratinjau dari sesi sebelumnya supaya tidak dobel
+        // baca template "authoring" sekali (kalau ada) lalu sembunyikan
+        var authored = GameObject.Find(AuthoringRootName);
+        if (authored != null)
+        {
+            _authoringTemplate = authored.GetComponentInChildren<PlayerController>(true);
+            authored.SetActive(false);
+        }
+
+        // buang sisa root/pratinjau dari sesi sebelumnya supaya tidak dobel
+        // (nama "SEA Chan World (Authoring)" TIDAK terhapus karena pencocokan persis)
         CleanupByName("SEA Chan World");
         CleanupByName("PREVIEW_World");
 
@@ -125,6 +139,10 @@ public class GameBootstrap : MonoBehaviour
 
     public static GameplayRefs CreateGameplay()
     {
+        // Kalau scene punya struktur "authoring", pakai pengaturan dari situ
+        // (posisi awal, kecepatan, dll) supaya hasil editan di Inspector terpakai.
+        var tpl = _authoringTemplate;
+
         // hapus semua container dunia yang tersisa (kalau ada)
         var strays = Object.FindObjectsByType<GameplayMarker>();
         for (int i = 0; i < strays.Length; i++)
@@ -152,6 +170,16 @@ public class GameBootstrap : MonoBehaviour
         var walls = wallsGo.AddComponent<WallLayer>();
 
         var player = BuildPlayer(gameplay.transform);
+
+        // terapkan pengaturan dari scene authoring (kalau ada)
+        if (tpl != null)
+        {
+            player.transform.position = tpl.transform.position;
+            player.moveSpeed = tpl.moveSpeed;
+            player.pickupRadius = tpl.pickupRadius;
+            player.dashSpeed = tpl.dashSpeed;
+            player.dashCooldown = tpl.dashCooldown;
+        }
 
         ground.Init(player.transform, LoadFloorSprites());
         props.Init(player.transform, LoadPropSprites());
@@ -181,6 +209,7 @@ public class GameBootstrap : MonoBehaviour
     public static GameObject BuildStructurePreview(Transform parent)
     {
         var root = new GameObject("SEA Chan World");
+        if (parent != null) root.transform.SetParent(parent, false);
 
         var camGo = new GameObject("Main Camera");
         camGo.transform.SetParent(root.transform, false);

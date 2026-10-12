@@ -13,12 +13,15 @@ public class UIManager : MonoBehaviour
     // ---- referensi HUD ----
     GameObject hudRoot;
     Text timerText, killText, tierText, levelText;
-    RectTransform hpFill, xpFill;
+    RectTransform hpFill, xpFill, chargeFill;
+    Text comboText, hpText, ultLabel;
+    Image lowHp;
     const float HpW = 420f, HpH = 34f, XpW = 420f, XpH = 18f;
 
     GameObject bossRoot;
     RectTransform bossFill;
     Text bossName;
+    Image bossArrow;
 
     RectTransform canvasRect;
     RectTransform crosshair;
@@ -44,6 +47,10 @@ public class UIManager : MonoBehaviour
     RectTransform[] menuDots;
     Vector2[] menuDotDir;
     Image damageFlash;
+    // cutscene boss
+    GameObject cutsceneRoot;
+    Image cutBg;
+    Text cutLabel, cutName;
 
     // ---- layar ----
     GameObject menuRoot, settingsRoot, pauseRoot, gameOverRoot, upgradeRoot;
@@ -91,6 +98,7 @@ public class UIManager : MonoBehaviour
         BuildWeaponPanel(c);
         BuildCrosshair(c);
         BuildDamageFlash(c);
+        BuildBossCutscene(c);
         BuildMenu(c);
         BuildSettings(c);
         BuildPause(c);
@@ -120,19 +128,37 @@ public class UIManager : MonoBehaviour
 
         // panel kiri bawah
         UIFactory.Image("HudCard", p, new Color(0.05f, 0.07f, 0.11f, 0.72f),
-            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 24f), new Vector2(HpW + 40f, 130f));
+            Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(24f, 24f), new Vector2(HpW + 40f, 202f));
 
-        UIFactory.Bar(p, "HpBar", new Vector2(44f, 96f), new Vector2(HpW, HpH),
+        UIFactory.Label(p, "HP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 196f),
+            new Vector2(80f, 24f), 20, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+        UIFactory.Bar(p, "HpBar", new Vector2(44f, 168f), new Vector2(HpW, HpH),
             new Color(0.90f, 0.25f, 0.33f), out hpFill);
-        UIFactory.Label(p, "HP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 118f),
-            new Vector2(60f, 24f), 20, UIFactory.TextDim, TextAnchor.LowerLeft, true);
 
-        UIFactory.Bar(p, "XpBar", new Vector2(44f, 66f), new Vector2(XpW, XpH),
+        UIFactory.Label(p, "EXP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 144f),
+            new Vector2(80f, 22f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+        UIFactory.Bar(p, "XpBar", new Vector2(44f, 120f), new Vector2(XpW, XpH),
             new Color(0.35f, 0.90f, 0.62f), out xpFill);
-        UIFactory.Label(p, "EXP", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 40f),
-            new Vector2(60f, 22f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+
+        ultLabel = UIFactory.Label(p, "ULTIMATE  (Q)", Vector2.zero, Vector2.zero, Vector2.zero, new Vector2(44f, 94f),
+            new Vector2(300f, 22f), 18, UIFactory.TextDim, TextAnchor.LowerLeft, true);
+        RectTransform chargeRt;
+        UIFactory.Bar(p, "ChargeBar", new Vector2(44f, 70f), new Vector2(XpW, XpH),
+            new Color(0.45f, 0.92f, 1f), out chargeRt);
+        chargeFill = chargeRt;
+
         levelText = UIFactory.Label(p, "LV 1", Vector2.zero, Vector2.zero, Vector2.zero,
-            new Vector2(300f, 40f), new Vector2(200f, 30f), 24, UIFactory.Accent2, TextAnchor.LowerLeft, true);
+            new Vector2(300f, 34f), new Vector2(200f, 30f), 24, UIFactory.Accent2, TextAnchor.LowerLeft, true);
+
+        // angka HP di ujung bar
+        hpText = UIFactory.Label(p, "", Vector2.zero, Vector2.zero, Vector2.zero,
+            new Vector2(300f, 168f), new Vector2(164f, 30f), 20,
+            UIFactory.TextMain, TextAnchor.LowerRight);
+
+        // indikator combo (bunuh beruntun)
+        comboText = UIFactory.Label(p, "", new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f),
+            new Vector2(30f, -276f), new Vector2(420f, 46f), 34,
+            new Color(1f, 0.78f, 0.3f, 0f), TextAnchor.UpperLeft, true);
 
         // panel kanan atas (timer / musuh / tier)
         UIFactory.Image("StatsCard", p, new Color(0.05f, 0.07f, 0.11f, 0.72f),
@@ -192,6 +218,59 @@ public class UIManager : MonoBehaviour
         fillImg.raycastTarget = false;
 
         bossRoot.SetActive(false);
+
+        // penunjuk arah boss kalau dia berada di luar layar
+        bossArrow = UIFactory.Image("BossArrow", c, new Color(1f, 0.36f, 0.32f, 0.95f),
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            Vector2.zero, new Vector2(58f, 58f));
+        bossArrow.sprite = SpriteFactory.Arrow;
+        bossArrow.gameObject.SetActive(false);
+    }
+
+    void UpdateBossArrow()
+    {
+        if (bossArrow == null || canvasRect == null) return;
+
+        var gm = GameManager.Instance;
+        var cam = Camera.main;
+        if (gm == null || cam == null || !gm.IsRunning)
+        {
+            if (bossArrow.gameObject.activeSelf) bossArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        Enemy boss = null;
+        var all = Enemy.All;
+        for (int i = 0; i < all.Count; i++)
+            if (all[i] != null && all[i].IsBoss) { boss = all[i]; break; }
+
+        if (boss == null)
+        {
+            if (bossArrow.gameObject.activeSelf) bossArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        Vector3 vp = cam.WorldToViewportPoint(boss.transform.position);
+        bool off = vp.x < 0.07f || vp.x > 0.93f || vp.y < 0.09f || vp.y > 0.91f;
+        if (!off)
+        {
+            if (bossArrow.gameObject.activeSelf) bossArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        Vector2 d = new Vector2(vp.x - 0.5f, vp.y - 0.5f);
+        if (d.sqrMagnitude < 0.0001f) d = Vector2.right;
+        d.Normalize();
+
+        float limX = canvasRect.rect.width * 0.5f - 90f;
+        float limY = canvasRect.rect.height * 0.5f - 90f;
+        float sx = Mathf.Abs(d.x) > 0.001f ? limX / Mathf.Abs(d.x) : float.MaxValue;
+        float sy = Mathf.Abs(d.y) > 0.001f ? limY / Mathf.Abs(d.y) : float.MaxValue;
+        float s = Mathf.Min(sx, sy);
+
+        bossArrow.rectTransform.anchoredPosition = d * s;
+        bossArrow.rectTransform.localRotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(d.y, d.x) * Mathf.Rad2Deg);
+        if (!bossArrow.gameObject.activeSelf) bossArrow.gameObject.SetActive(true);
     }
 
     void BuildWeaponPanel(Transform c)
@@ -219,6 +298,10 @@ public class UIManager : MonoBehaviour
     {
         damageFlash = UIFactory.FullPanel(c, "DamageFlash", new Color(0.85f, 0.06f, 0.09f, 0f));
         damageFlash.raycastTarget = false;
+
+        // peringatan HP rendah (berdenyut di tepi layar)
+        lowHp = UIFactory.FullPanel(c, "LowHpWarn", new Color(0.80f, 0.05f, 0.08f, 0f));
+        lowHp.raycastTarget = false;
     }
 
     // Dipanggil saat player kena damage: seluruh layar berkilat merah sebentar.
@@ -228,6 +311,110 @@ public class UIManager : MonoBehaviour
         var col = damageFlash.color;
         col.a = 0.24f;
         damageFlash.color = col;
+    }
+
+    // -------------------------------------------------- CUTSCENE BOSS
+    void BuildBossCutscene(Transform c)
+    {
+        cutBg = UIFactory.FullPanel(c, "BossCutscene", new Color(0f, 0f, 0f, 0f));
+        cutBg.raycastTarget = false;
+        cutsceneRoot = cutBg.gameObject;
+
+        cutLabel = UIFactory.Label(cutsceneRoot.transform, "!!  WARNING  !!", new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 96f),
+            new Vector2(1400f, 50f), 36, new Color(1f, 0.35f, 0.32f, 0f), TextAnchor.MiddleCenter, true);
+
+        cutName = UIFactory.Label(cutsceneRoot.transform, "", new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0f, 10f),
+            new Vector2(1700f, 130f), 88, new Color(1f, 0.92f, 0.88f, 0f), TextAnchor.MiddleCenter, true);
+        UIFactory.AddOutline(cutName, 3f);
+
+        cutsceneRoot.SetActive(false);
+    }
+
+    void SetCutText(float labelA, float nameA)
+    {
+        if (cutLabel != null) { var c = cutLabel.color; c.a = labelA; cutLabel.color = c; }
+        if (cutName != null) { var c = cutName.color; c.a = nameA; cutName.color = c; }
+    }
+
+    public void PlayBossCutscene(string bossName, Transform boss, Action onDone)
+    {
+        if (cutsceneRoot == null)
+        {
+            if (onDone != null) onDone();
+            return;
+        }
+
+        cutName.text = bossName.ToUpperInvariant();
+        cutName.rectTransform.localScale = Vector3.one;
+        SetCutText(0f, 0f);
+        cutBg.color = new Color(0f, 0f, 0f, 0f);
+        cutsceneRoot.SetActive(true);
+
+        StartCoroutine(CutsceneRoutine(boss, onDone));
+    }
+
+    IEnumerator CutsceneRoutine(Transform boss, Action onDone)
+    {
+        var cam = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
+
+        // 1) kamera bergerak ke LOKASI BOSS (menandakan dia muncul di mana)
+        if (cam != null && boss != null) cam.SetFocus(boss.position, 1.18f);
+
+        float t = 0f;
+        while (t < 0.8f)
+        {
+            t += Time.unscaledDeltaTime;
+            float a = Mathf.Clamp01(t / 0.8f);
+            cutBg.color = new Color(0f, 0f, 0f, a * 0.45f);
+            SetCutText(a, 0f);
+            yield return null;
+        }
+
+        // tanda ledakan kecil di posisi boss supaya mata langsung tertuju ke sana
+        if (boss != null)
+        {
+            AuraVisual.Spawn(boss.position, 3.4f, new Color(1f, 0.3f, 0.3f, 0.35f));
+            Burst.Spawn(boss.position, new Color(1f, 0.6f, 0.5f), 16, 6.5f, 0.22f, 0.6f);
+        }
+
+        // 2) nama boss muncul membesar
+        t = 0f;
+        while (t < 0.45f)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(t / 0.45f));
+            SetCutText(1f, k);
+            cutName.rectTransform.localScale = Vector3.one * Mathf.Lerp(1.4f, 1f, k);
+            yield return null;
+        }
+
+        // 3) tahan sebentar
+        t = 0f;
+        while (t < 1.4f)
+        {
+            t += Time.unscaledDeltaTime;
+            SetCutText(1f, 1f);
+            yield return null;
+        }
+
+        // 4) kamera kembali ke player + tampilan memudar
+        if (cam != null) cam.ClearFocus();
+
+        t = 0f;
+        while (t < 0.7f)
+        {
+            t += Time.unscaledDeltaTime;
+            float k = 1f - Mathf.Clamp01(t / 0.7f);
+            SetCutText(k, k);
+            cutBg.color = new Color(0f, 0f, 0f, 0.45f * k);
+            yield return null;
+        }
+
+        cutBg.color = new Color(0f, 0f, 0f, 0f);
+        cutsceneRoot.SetActive(false);
+        if (onDone != null) onDone();
     }
 
     void BuildCrosshair(Transform c)
@@ -471,6 +658,12 @@ public class UIManager : MonoBehaviour
         UIFactory.Label(card, "ADVENTURE", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
             new Vector2(0.5f, 0.5f), new Vector2(0f, 210f), new Vector2(820f, 70f), 48,
             UIFactory.Accent, TextAnchor.MiddleCenter, true);
+
+        // garis tepi pada judul supaya lebih tegas (gaya arcade)
+        var menuTexts = card.GetComponentsInChildren<Text>();
+        for (int i = 0; i < menuTexts.Length; i++)
+            if (menuTexts[i].text == "SEA CHAN" || menuTexts[i].text == "ADVENTURE")
+                UIFactory.AddOutline(menuTexts[i], 2.8f);
         UIFactory.Label(card, "Showcase  •  Game Dev Study Group SEA GEN 11",
             new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
             new Vector2(0f, 160f), new Vector2(820f, 36f), 24, UIFactory.TextDim, TextAnchor.MiddleCenter);
@@ -493,6 +686,10 @@ public class UIManager : MonoBehaviour
 #endif
                 Application.Quit();
             });
+
+        UIFactory.Label(menuRoot.transform, "Dibuat oleh Mentor Divisi Game Dev  •  Study Group SEA GEN 11",
+            new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
+            new Vector2(0f, 78f), new Vector2(1700f, 34f), 22, UIFactory.Accent2, TextAnchor.MiddleCenter, true);
 
         UIFactory.Label(menuRoot.transform, "Cara main: kumpulkan XP, hindari musuh, pilih upgrade, kalahkan Boss.",
             new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f),
@@ -813,11 +1010,75 @@ public class UIManager : MonoBehaviour
 
         var player = gm.Player;
         if (player.Health != null)
+        {
             UIFactory.SetBarFill(hpFill, player.Health.Max <= 0f ? 0f : player.Health.Current / player.Health.Max, HpW, HpH);
+            if (hpText != null)
+                hpText.text = Mathf.CeilToInt(player.Health.Current) + " / " + Mathf.CeilToInt(player.Health.Max);
+        }
         if (player.Stats != null)
         {
             UIFactory.SetBarFill(xpFill, player.Stats.XPToNext <= 0f ? 0f : player.Stats.XP / player.Stats.XPToNext, XpW, XpH);
             if (levelText != null) levelText.text = "LV " + player.Stats.Level;
+        }
+
+        // meter ultimate (juga menampilkan cooldown)
+        if (chargeFill != null)
+        {
+            UIFactory.SetBarFill(chargeFill, gm.ChargeRatio, XpW, XpH);
+            var ci = chargeFill.GetComponent<Image>();
+            if (ci != null)
+            {
+                if (gm.UltimateLocked) ci.color = new Color(0.42f, 0.44f, 0.52f);       // abu = cooldown
+                else if (gm.ChargeReady) ci.color = new Color(1f, 0.95f, 0.5f);          // emas = siap
+                else ci.color = new Color(0.45f, 0.92f, 1f);                             // cyan = mengisi
+            }
+
+            if (ultLabel != null)
+            {
+                if (gm.UltimateLocked)
+                {
+                    ultLabel.text = "ULTIMATE  COOLDOWN  " + Mathf.CeilToInt(gm.UltimateCooldown) + "s";
+                    ultLabel.color = new Color(0.60f, 0.63f, 0.72f);
+                }
+                else if (gm.ChargeReady)
+                {
+                    ultLabel.text = "ULTIMATE  (Q)  —  SIAP!";
+                    ultLabel.color = new Color(1f, 0.95f, 0.5f);
+                }
+                else
+                {
+                    ultLabel.text = "ULTIMATE  (Q)";
+                    ultLabel.color = UIFactory.TextDim;
+                }
+            }
+        }
+
+        // indikator combo
+        if (comboText != null)
+        {
+            if (gm.Combo >= 3)
+            {
+                comboText.text = "COMBO  x" + gm.Combo;
+                var cc = comboText.color;
+                cc.a = Mathf.Min(1f, 0.55f + gm.Combo * 0.03f);
+                comboText.color = cc;
+            }
+            else
+            {
+                var cc = comboText.color;
+                cc.a = 0f;
+                comboText.color = cc;
+            }
+        }
+
+        // peringatan HP rendah (berdenyut)
+        if (lowHp != null && player.Health != null)
+        {
+            float ratio = player.Health.Max <= 0f ? 1f : player.Health.Current / player.Health.Max;
+            float target = ratio < 0.3f ? 0.08f + 0.09f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 3.5f)) : 0f;
+            var lc = lowHp.color;
+            lc.a = Mathf.MoveTowards(lc.a, target, 0.6f * Time.unscaledDeltaTime);
+            lowHp.color = lc;
         }
 
         int min = Mathf.FloorToInt(gm.TimeAlive / 60f);
@@ -828,6 +1089,7 @@ public class UIManager : MonoBehaviour
 
         UpdateWeaponPanel();
         UpdateBossBar();
+        UpdateBossArrow();
 
         if (bannerTimer > 0f && bannerText != null)
         {

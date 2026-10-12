@@ -80,3 +80,65 @@ public class Burst : MonoBehaviour
         if (!alive) Destroy(gameObject);
     }
 }
+
+// Angka damage melayang (naik lalu memudar) saat musuh kena serangan.
+public class DamageText : MonoBehaviour
+{
+    static int live;
+
+    TextMesh tm;
+    MeshRenderer mr;
+    float t;
+    float life = 0.7f;
+    Vector3 vel;
+
+    public static void Spawn(Vector3 pos, string text, Color color, float scale = 1f)
+    {
+        if (live > 36) return;   // batasi supaya tidak berat
+
+        var go = new GameObject("DmgText");
+        if (GameBootstrap.WorldRoot != null) go.transform.SetParent(GameBootstrap.WorldRoot, false);
+        go.transform.position = pos;
+
+        var tm = go.AddComponent<TextMesh>();
+        var font = UIFactory.UIFont;
+        tm.font = font;
+        if (font != null) tm.fontSize = 48;
+        tm.text = text;
+        tm.color = color;
+        tm.anchor = TextAnchor.MiddleCenter;
+        tm.alignment = TextAlignment.Center;
+        tm.characterSize = 0.055f * scale;
+
+        var mr = go.GetComponent<MeshRenderer>();
+        if (mr != null)
+        {
+            if (font != null) mr.material = font.material;
+            mr.sortingOrder = 30;
+        }
+
+        var d = go.AddComponent<DamageText>();
+        d.tm = tm;
+        d.mr = mr;
+        d.vel = new Vector3(Random.Range(-0.9f, 0.9f), 2.3f, 0f);
+        live++;
+    }
+
+    void Update()
+    {
+        float dt = Time.deltaTime;
+        t += dt;
+
+        transform.position += vel * dt;
+        vel *= 1f - Mathf.Clamp01(1.6f * dt);
+
+        float k = 1f - Mathf.Clamp01(t / life);
+        if (tm != null) { var c = tm.color; c.a = k; tm.color = c; }
+
+        if (t >= life)
+        {
+            live--;
+            Destroy(gameObject);
+        }
+    }
+}

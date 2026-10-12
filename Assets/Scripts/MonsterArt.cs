@@ -1,14 +1,19 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Keunikan serangan tiap Boss (masing-masing beda, tidak digabung).
+public enum BossSkill { None, Gun, Aura, Laser }
+
 // Satu jenis monster: kumpulan frame animasi + nama tampil.
 public class MonsterDef
 {
     public Sprite[] Frames;
     public string Name;
     public bool IsBoss;
+    public bool Elite;          // boss khusus (punya cutscene & 2 serangan)
+    public BossSkill Skill = BossSkill.None;
     // Peluang menjatuhkan kotak obat (RNG, jarang).
-    public float HealthDropChance = 0.05f;
+    public float HealthDropChance = 0.02f;
 }
 
 // Memuat sprite monster dari Assets/Resources/Monsters/.
@@ -17,6 +22,7 @@ public static class MonsterArt
 {
     static MonsterDef[] _regular;
     static MonsterDef[] _bosses;
+    static MonsterDef[] _elite;
     static bool _loaded;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -24,11 +30,13 @@ public static class MonsterArt
     {
         _regular = null;
         _bosses = null;
+        _elite = null;
         _loaded = false;
     }
 
     public static int RegularCount { get { Load(); return _regular.Length; } }
     public static int BossCount { get { Load(); return _bosses.Length; } }
+    public static int EliteCount { get { Load(); return _elite.Length; } }
 
     public static MonsterDef GetRegular(int i)
     {
@@ -46,6 +54,15 @@ public static class MonsterArt
         return _bosses[k];
     }
 
+    // Boss ELITE (dipakai untuk boss yang punya cutscene).
+    public static MonsterDef GetEliteBoss(int i)
+    {
+        Load();
+        if (_elite.Length == 0) return GetBoss(i);
+        int k = i % _elite.Length; if (k < 0) k += _elite.Length;
+        return _elite[k];
+    }
+
     static void Load()
     {
         if (_loaded) return;
@@ -53,6 +70,7 @@ public static class MonsterArt
 
         var regular = new List<MonsterDef>();
         var bosses = new List<MonsterDef>();
+        var elite = new List<MonsterDef>();
 
         var texs = Resources.LoadAll<Texture2D>("Monsters");
         System.Array.Sort(texs, (a, b) => string.CompareOrdinal(a.name, b.name));
@@ -66,11 +84,14 @@ public static class MonsterArt
             bool boss = t.name.ToLowerInvariant().Contains("boss");
             var def = MakeDef(t, boss);
             if (def == null) continue;
-            if (boss) bosses.Add(def); else regular.Add(def);
+            if (!boss) regular.Add(def);
+            else if (def.Elite) elite.Add(def);
+            else bosses.Add(def);
         }
 
         _regular = regular.ToArray();
         _bosses = bosses.ToArray();
+        _elite = elite.ToArray();
 
         if (_regular.Length == 0 && _bosses.Length == 0)
             Debug.LogWarning("[SEA Chan] Tidak ada sprite monster di Assets/Resources/Monsters/.");
@@ -78,13 +99,16 @@ public static class MonsterArt
 
     static MonsterDef MakeDef(Texture2D tex, bool boss)
     {
+        string low = tex.name.ToLowerInvariant();
+        bool elite = boss && low.Contains("elite");
+
         int size = tex.height;
         if (size <= 0) return null;
 
         int count = Mathf.Max(1, tex.width / size);
         count = Mathf.Min(count, 12);
 
-        float targetHeight = boss ? 2.6f : 1.0f;
+        float targetHeight = boss ? (elite ? 3.4f : 2.6f) : 1.0f;
         float ppu = size / targetHeight;
 
         var frames = new Sprite[count];
@@ -94,18 +118,29 @@ public static class MonsterArt
             frames[i] = Sprite.Create(tex, rect, new Vector2(0.5f, 0.08f), ppu);
         }
 
-        // Peluang drop HP: boss tinggi, robot berat sedang, drone kecil jarang.
-        string low = tex.name.ToLowerInvariant();
-        float drop = 0.05f;
-        if (boss) drop = 0.75f;
-        else if (low.Contains("heavy") || low.Contains("hybrid") || low.Contains("tank")) drop = 0.16f;
-        else if (low.Contains("drone")) drop = 0.03f;
+        // Peluang drop HP: dibuat JARANG supaya tidak terlalu mudah.
+        float drop = 0.02f;                       // robot biasa
+        if (boss) drop = 0.50f;                   // boss (kadang)
+        else if (low.Contains("heavy") || low.Contains("hybrid") || low.Contains("tank")) drop = 0.07f;
+        else if (low.Contains("drone")) drop = 0.012f;
+
+        // Keunikan serangan tiap boss (dari namanya)
+        BossSkill skill = BossSkill.None;
+        if (boss)
+        {
+            if (low.Contains("mech")) skill = BossSkill.Gun;
+            else if (low.Contains("brain")) skill = BossSkill.Aura;
+            else if (low.Contains("spider")) skill = BossSkill.Laser;
+            else skill = BossSkill.Gun;
+        }
 
         return new MonsterDef
         {
             Frames = frames,
             Name = PrettyName(tex.name),
             IsBoss = boss,
+            Elite = elite,
+            Skill = skill,
             HealthDropChance = drop
         };
     }

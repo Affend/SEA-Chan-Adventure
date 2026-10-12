@@ -18,6 +18,13 @@ public class PlayerController : MonoBehaviour
     public Vector2 AimPoint { get; private set; }
     public bool Moving { get; private set; }
 
+    [Header("Dash")]
+    public float dashSpeed = 17f;
+    public float dashDuration = 0.16f;
+    public float dashCooldown = 1.5f;
+    float dashTime;
+    float dashCd;
+
     float lastHP = -1f;
     float hurtTimer;
 
@@ -52,6 +59,15 @@ public class PlayerController : MonoBehaviour
         if (Active == this) Active = null;
     }
 
+    // Dipakai semua sumber damage ke player: menghormati i-frames & shield.
+    public void Hurt(float amount)
+    {
+        if (Health == null || Health.IsDead) return;
+        if (Stats != null && !Stats.CanTakeDamage()) return;
+        if (Stats != null) Stats.MarkHit();
+        Health.TakeDamage(amount);
+    }
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     public static void ResetStatics() { Active = null; }
 
@@ -83,7 +99,21 @@ public class PlayerController : MonoBehaviour
         Moving = m.sqrMagnitude > 0.0001f;
         if (Moving) MoveDir = m.normalized;
 
-        if (rb != null) rb.linearVelocity = m * moveSpeed;
+        // --- dash (tombol Shift) ---
+        if (dashCd > 0f) dashCd -= Time.deltaTime;
+        if (dashTime > 0f) dashTime -= Time.deltaTime;
+
+        bool dashKey = InputHelper.GetKeyDown(KeyCode.LeftShift) || InputHelper.GetKeyDown(KeyCode.RightShift);
+        if (dashKey && dashCd <= 0f && MoveDir.sqrMagnitude > 0.01f)
+        {
+            dashTime = dashDuration;
+            dashCd = dashCooldown;
+            Burst.Spawn(transform.position, new Color(0.6f, 0.92f, 1f), 10, 3.5f, 0.15f, 0.3f);
+            AudioManager.Play("shoot", 0.2f);
+        }
+
+        if (rb != null)
+            rb.linearVelocity = (dashTime > 0f) ? MoveDir * dashSpeed : m * moveSpeed;
 
         if (regenPerSecond > 0f && Health != null) Health.Heal(regenPerSecond * Time.deltaTime);
 
@@ -93,8 +123,9 @@ public class PlayerController : MonoBehaviour
             hurtTimer -= Time.deltaTime;
             if (Health.Current < lastHP - 0.5f)
             {
-                // indikator kena damage (kilat merah di layar)
+                // indikator kena damage (kilat merah di layar + kamera bergetar)
                 if (UIManager.Instance != null) UIManager.Instance.DamageFlash();
+                CameraFollow.DoShake(0.09f, 0.12f);
 
                 if (hurtTimer <= 0f) { AudioManager.Play("hurt", 0.45f); hurtTimer = 0.6f; }
                 lastHP = Health.Current;
@@ -119,6 +150,16 @@ public class PlayerStats : MonoBehaviour
     public float DamageBonus = 0f;
     public float CooldownReduction = 0f;
 
+    // --- kebal sesaat setelah kena pukul (i-frames) ---
+    public float invulnTime = 0.5f;
+    float invulnUntil;
+
+    // --- buff dari power-up ---
+    public float overdriveUntil;   // tembakan 2x lebih cepat
+    public float shieldUntil;      // kebal total
+    public bool Overdrive => Time.time < overdriveUntil;
+    public bool Shield => Time.time < shieldUntil;
+
     public System.Action<float, float> XPChanged;
     public System.Action<int> LeveledUp;
 
@@ -127,8 +168,26 @@ public class PlayerStats : MonoBehaviour
         Level = 1;
         XP = 0f;
         XPToNext = 5f;
+        invulnUntil = 0f;
+        overdriveUntil = 0f;
+        shieldUntil = 0f;
         XPChanged?.Invoke(XP, XPToNext);
     }
+
+    // true kalau damage boleh masuk (tidak sedang kebal / shield).
+    public bool CanTakeDamage()
+    {
+        if (Shield) return false;
+        return Time.time >= invulnUntil;
+    }
+
+    public void MarkHit()
+    {
+        invulnUntil = Time.time + invulnTime;
+    }
+
+    public void GiveOverdrive(float dur) { overdriveUntil = Time.time + dur; }
+    public void GiveShield(float dur) { shieldUntil = Time.time + dur; }
 
     public void AddXP(float amount)
     {
@@ -175,7 +234,7 @@ public class Projectile : MonoBehaviour
         var enemy = Enemy.Nearest(transform.position, hitRadius);
         if (enemy != null)
         {
-            enemy.Health.TakeDamage(damage);
+            enemy.ApplyDamage(damage);
             Destroy(gameObject);
         }
     }
@@ -203,7 +262,9 @@ public abstract class Weapon : MonoBehaviour
 
     protected float Cd(float baseCd)
     {
-        return Mathf.Max(0.05f, baseCd * (1f - Mathf.Clamp01(player.Stats.CooldownReduction)));
+        float cd = Mathf.Max(0.05f, baseCd * (1f - Mathf.Clamp01(player.Stats.CooldownReduction)));
+        if (player.Stats.Overdrive) cd *= 0.5f;   // power-up Overdrive
+        return Mathf.Max(0.03f, cd);
     }
 
     protected void ClearNodes(Transform holder)
@@ -342,7 +403,7 @@ public class LaserWeapon : Weapon
             float forward = Vector2.Dot(to, dir);
             if (forward < 0f || forward > BeamRange) continue;
             float side = Mathf.Abs(Vector2.Dot(to, normal));
-            if (side <= BeamWidth + e.Radius) e.Health.TakeDamage(Damage);
+            if (side <= BeamWidth + e.Radius) e.ApplyDamage(Damage);
         }
 
         LaserVisual.Spawn(origin, dir, BeamRange, BeamWidth);
@@ -375,7 +436,7 @@ public class AuraWeapon : Weapon
             var e = list[i];
             if (e == null) continue;
             if (Vector2.Distance(e.transform.position, player.transform.position) <= r)
-                e.Health.TakeDamage(Damage);
+                e.ApplyDamage(Damage);
         }
         AuraVisual.Spawn(player.transform.position, r);
     }
@@ -425,20 +486,28 @@ public class AuraVisual : MonoBehaviour
     SpriteRenderer sr;
     float t;
     float dur = 0.28f;
+    float baseA = 0.20f;
 
     public static void Spawn(Vector3 pos, float radius)
     {
+        Spawn(pos, radius, new Color(0.45f, 0.9f, 1f, 0.20f));
+    }
+
+    // Versi dengan warna (dipakai musuh/boss dengan warna berbeda).
+    public static void Spawn(Vector3 pos, float radius, Color color)
+    {
         var sr = SpriteFactory.NewSprite("Aura", GameBootstrap.WorldRoot,
-            new Color(0.45f, 0.9f, 1f, 0.20f), true, 6, pos, radius * 2f);
+            color, true, 6, pos, radius * 2f);
         var v = sr.gameObject.AddComponent<AuraVisual>();
         v.sr = sr;
+        v.baseA = color.a;
     }
 
     void Update()
     {
         t += Time.unscaledDeltaTime;
         float k = 1f - Mathf.Clamp01(t / dur);
-        if (sr != null) { var c = sr.color; c.a = 0.20f * k; sr.color = c; }
+        if (sr != null) { var c = sr.color; c.a = baseA * k; sr.color = c; }
         if (t >= dur) Destroy(gameObject);
     }
 }
@@ -448,24 +517,31 @@ public class LaserVisual : MonoBehaviour
     SpriteRenderer sr;
     float t;
     float dur = 0.16f;
+    float baseA = 0.9f;
 
     public static void Spawn(Vector2 origin, Vector2 dir, float range, float width)
     {
+        Spawn(origin, dir, range, width, new Color(0.5f, 1f, 1f, 0.9f));
+    }
+
+    // Versi dengan warna (dipakai boss dengan warna berbeda).
+    public static void Spawn(Vector2 origin, Vector2 dir, float range, float width, Color color)
+    {
         var sr = SpriteFactory.NewSprite("Laser", GameBootstrap.WorldRoot,
-            new Color(0.5f, 1f, 1f, 0.9f), false, 25,
-            origin + dir * (range * 0.5f), 1f);
+            color, false, 25, origin + dir * (range * 0.5f), 1f);
         var tr = sr.transform;
         tr.rotation = Quaternion.Euler(0f, 0f, Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg);
         tr.localScale = new Vector3(range, width * 2f, 1f);
         var v = sr.gameObject.AddComponent<LaserVisual>();
         v.sr = sr;
+        v.baseA = color.a;
     }
 
     void Update()
     {
         t += Time.unscaledDeltaTime;
         float k = 1f - Mathf.Clamp01(t / dur);
-        if (sr != null) { var c = sr.color; c.a = 0.85f * k; sr.color = c; }
+        if (sr != null) { var c = sr.color; c.a = baseA * k; sr.color = c; }
         if (t >= dur) Destroy(gameObject);
     }
 }

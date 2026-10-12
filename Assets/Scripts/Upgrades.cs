@@ -48,9 +48,9 @@ public static class UpgradeManager
         // --- Upgrade pasif ---
         pool.Add(new UpgradeDef
         {
-            Title = "Max HP +20",
+            Title = "Max HP +15",
             Desc = "Darah maksimum bertambah",
-            Apply = () => p.Health.AddMax(20f, true)
+            Apply = () => p.Health.AddMax(15f, true)
         });
         pool.Add(new UpgradeDef
         {

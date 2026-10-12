@@ -31,10 +31,11 @@ public static class UIFactory
         {
             if (_font == null)
             {
+                // font "futuristik/retro" bawaan Windows (tanpa perlu download)
                 try
                 {
                     _font = Font.CreateDynamicFontFromOSFont(
-                        new[] { "Arial", "Segoe UI", "Tahoma", "Verdana", "Liberation Sans" }, 32);
+                        new[] { "Bahnschrift", "Consolas", "Cascadia Mono", "Segoe UI", "Tahoma", "Arial" }, 32);
                 }
                 catch { }
                 if (_font == null) { try { _font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf"); } catch { } }
@@ -42,6 +43,16 @@ public static class UIFactory
             }
             return _font;
         }
+    }
+
+    // Garis tepi gelap di teks supaya lebih tajam/jelas (gaya game arcade).
+    public static void AddOutline(Graphic g, float dist = 1.6f)
+    {
+        if (g == null) return;
+        var ol = g.gameObject.GetComponent<Outline>();
+        if (ol == null) ol = g.gameObject.AddComponent<Outline>();
+        ol.effectColor = new Color(0f, 0f, 0f, 0.6f);
+        ol.effectDistance = new Vector2(dist, -dist);
     }
 
     public static Canvas CreateCanvas(Transform parent, string name, int sortOrder)
@@ -169,6 +180,7 @@ public static class UIFactory
         t.fontStyle = FontStyle.Bold;
         t.horizontalOverflow = HorizontalWrapMode.Wrap;
         t.verticalOverflow = VerticalWrapMode.Overflow;
+        AddOutline(t, 1.6f);
 
         // garis aksen di sisi kiri tombol
         var stripe = Rect("Stripe", rt, new Vector2(0f, 0f), new Vector2(0f, 1f),

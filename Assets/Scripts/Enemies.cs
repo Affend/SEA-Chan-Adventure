@@ -16,7 +16,11 @@ public class Enemy : MonoBehaviour
     public int XPDrop = 3;
     public bool IsBoss;
     public string DisplayName = "Monster";
-    public float HealthDropChance = 0.05f;
+    public float HealthDropChance = 0.02f;
+    public BossSkill Skill = BossSkill.None;
+    public BossSkill Skill2 = BossSkill.None;   // serangan kedua (boss cutscene)
+    float skillTimer;
+    float skill2Timer;
 
     PlayerController player;
     Sprite[] frames;
@@ -46,14 +50,37 @@ public class Enemy : MonoBehaviour
             frames = def.Frames;
             DisplayName = def.Name;
             HealthDropChance = def.HealthDropChance;
+            Skill = def.Skill;
             if (sr != null) sr.sprite = frames[0];
         }
 
+        if (IsBoss) skillTimer = 2.5f;   // jeda sebelum serangan pertama
         if (sr != null) sr.color = tint;
+    }
+
+    // Dipakai senjata player: kurangi HP + tampilkan angka damage melayang.
+    public void ApplyDamage(float amount)
+    {
+        if (Health == null || Health.IsDead) return;
+        Health.TakeDamage(amount);
+
+        if (amount >= 5f && Random.value < 0.55f)
+        {
+            var col = IsBoss ? new Color(1f, 0.6f, 0.5f) : new Color(1f, 0.95f, 0.55f);
+            DamageText.Spawn(transform.position + Vector3.up * 0.7f,
+                Mathf.RoundToInt(amount).ToString(), col, IsBoss ? 1.4f : 0.9f);
+        }
     }
 
     void OnEnable() { if (!All.Contains(this)) All.Add(this); }
     void OnDisable() { All.Remove(this); }
+
+    // Dipakai boss cutscene: menambahkan serangan kedua yang berbeda.
+    public void SetSecondSkill(BossSkill s)
+    {
+        Skill2 = s;
+        skill2Timer = 4.5f;
+    }
 
     void OnDied(Health h)
     {
@@ -73,6 +100,9 @@ public class Enemy : MonoBehaviour
             Burst.Spawn(transform.position, burstColor, 26, 8.5f, 0.3f, 0.8f);
             AuraVisual.Spawn(transform.position, 3.4f);          // gelombang ledakan
             Burst.Spawn(transform.position, new Color(1f, 0.85f, 0.5f), 14, 5f, 0.22f, 0.6f);
+            CameraFollow.DoShake(0.35f, 0.4f);                   // kamera bergetar
+            // boss menjatuhkan power-up (acak antara Overdrive & Shield)
+            BuffPickup.Spawn(transform.position, Random.value < 0.5f ? BuffType.Overdrive : BuffType.Shield);
         }
         else
         {
@@ -84,10 +114,14 @@ public class Enemy : MonoBehaviour
         for (int i = 0; i < drops; i++)
             XPGem.Spawn(transform.position + (Vector3)(Random.insideUnitCircle * 0.5f), each);
 
-        // Drop kotak obat (RNG) — boss hampir selalu, robot biasa jarang.
+        // Drop kotak obat (RNG) — jarang, dan tidak menyembuhkan penuh.
         if (Random.value < HealthDropChance)
-            HealthPickup.Spawn(transform.position + (Vector3)(Random.insideUnitCircle * 0.6f),
-                IsBoss ? 50f : 25f);
+        {
+            float heal = 15f;
+            if (player != null && player.Health != null)
+                heal = Mathf.Max(8f, player.Health.Max * (IsBoss ? 0.25f : 0.12f));
+            HealthPickup.Spawn(transform.position + (Vector3)(Random.insideUnitCircle * 0.6f), heal);
+        }
 
         Destroy(gameObject);
     }
@@ -104,7 +138,7 @@ public class Enemy : MonoBehaviour
         transform.position += (Vector3)(dir * Speed * Time.deltaTime);
 
         if (dist <= Radius + 0.4f && player.Health != null)
-            player.Health.TakeDamage(ContactDamage * Time.deltaTime);
+            player.Hurt(ContactDamage);   // per-pukulan (i-frames yang mengatur jeda)
 
         if (frames != null && frames.Length > 1 && sr != null)
         {
@@ -116,6 +150,87 @@ public class Enemy : MonoBehaviour
                 sr.sprite = frames[animFrame];
             }
         }
+
+        // --- serangan khusus boss (tidak memakai senjata player) ---
+        // Boss biasa: 1 serangan. Boss yang punya cutscene: 2 kombinasi serangan.
+        if (IsBoss && Skill != BossSkill.None)
+        {
+            skillTimer -= Time.deltaTime;
+            if (skillTimer <= 0f) { Cast(Skill); skillTimer = CooldownFor(Skill); }
+        }
+        if (IsBoss && Skill2 != BossSkill.None)
+        {
+            skill2Timer -= Time.deltaTime;
+            if (skill2Timer <= 0f) { Cast(Skill2); skill2Timer = CooldownFor(Skill2); }
+        }
+    }
+
+    public static float CooldownFor(BossSkill s)
+    {
+        if (s == BossSkill.Gun) return 2.6f;
+        if (s == BossSkill.Aura) return 3.2f;
+        return 3.6f;
+    }
+
+    void Cast(BossSkill s)
+    {
+        switch (s)
+        {
+            case BossSkill.Gun: FireGunVolley(); break;
+            case BossSkill.Aura: FireAura(); break;
+            case BossSkill.Laser: FireLaser(); break;
+        }
+    }
+
+    // Boss MECH: menembakkan beberapa peluru menyebar ke arah player.
+    void FireGunVolley()
+    {
+        Vector2 origin = transform.position;
+        Vector2 to = (Vector2)player.transform.position - origin;
+        float baseAng = Mathf.Atan2(to.y, to.x);
+        int n = 5;
+        float dmg = (8f + GameManager.Instance.Tier * 2.2f) * (1f + Time.timeSinceLevelLoad / 300f);
+
+        for (int i = 0; i < n; i++)
+        {
+            float off = Mathf.Lerp(-22f, 22f, i / (float)(n - 1));
+            float a = baseAng + off * Mathf.Deg2Rad;
+            EnemyShot.Spawn(origin, new Vector2(Mathf.Cos(a), Mathf.Sin(a)), 8.5f, dmg);
+        }
+        AudioManager.Play("shoot", 0.5f);
+    }
+
+    // Boss BRAIN: memancarkan aura (ledakan energi) di sekelilingnya.
+    void FireAura()
+    {
+        float r = 4.4f;
+        float dmg = 10f + GameManager.Instance.Tier * 2.6f;
+
+        if (Vector2.Distance(player.transform.position, transform.position) <= r + 0.4f)
+            player.Hurt(dmg);
+
+        AuraVisual.Spawn(transform.position, r, new Color(1f, 0.45f, 0.35f, 0.28f));
+        AudioManager.Play("laser", 0.3f);
+    }
+
+    // Boss SPIDER: menembakkan laser lurus ke arah player.
+    void FireLaser()
+    {
+        Vector2 origin = transform.position;
+        Vector2 dir = ((Vector2)player.transform.position - origin);
+        if (dir.sqrMagnitude < 0.0001f) dir = Vector2.right;
+        dir.Normalize();
+
+        float range = 14f, width = 0.9f;
+        float dmg = 12f + GameManager.Instance.Tier * 3.2f;
+
+        Vector2 to = (Vector2)player.transform.position - origin;
+        float fwd = Vector2.Dot(to, dir);
+        float side = Mathf.Abs(Vector2.Dot(to, new Vector2(-dir.y, dir.x)));
+        if (fwd > 0f && fwd <= range && side <= width + 0.3f) player.Hurt(dmg);
+
+        LaserVisual.Spawn(origin, dir, range, width, new Color(1f, 0.35f, 0.3f, 0.9f));
+        AudioManager.Play("laser", 0.55f);
     }
 
     public static Enemy Nearest(Vector3 pos, float maxDist)
@@ -232,6 +347,96 @@ public class HealthPickup : MonoBehaviour
     }
 }
 
+// Peluru MILIK MUSUH (beda dari senjata player) — warna merah, melukai player.
+public class EnemyShot : MonoBehaviour
+{
+    float speed = 8.5f;
+    float damage = 10f;
+    float life = 5f;
+    const float HitRadius = 0.55f;
+    Vector2 dir;
+
+    public static void Spawn(Vector2 pos, Vector2 direction, float spd, float dmg)
+    {
+        var sr = SpriteFactory.NewSprite("EnemyShot", GameBootstrap.WorldRoot,
+            new Color(1f, 0.42f, 0.38f), true, 21, pos, 0.34f);
+        var s = sr.gameObject.AddComponent<EnemyShot>();
+        s.dir = direction.sqrMagnitude > 0.0001f ? direction.normalized : Vector2.right;
+        s.speed = spd;
+        s.damage = dmg;
+    }
+
+    void Update()
+    {
+        var gm = GameManager.Instance;
+        if (gm == null || !gm.IsRunning) return;
+
+        life -= Time.deltaTime;
+        if (life <= 0f) { Destroy(gameObject); return; }
+
+        transform.position += (Vector3)(dir * speed * Time.deltaTime);
+
+        var p = gm.Player;
+        if (p != null && p.Health != null &&
+            Vector2.Distance(transform.position, p.transform.position) <= HitRadius)
+        {
+            p.Hurt(damage);
+            Destroy(gameObject);
+        }
+    }
+}
+
+// Power-up: buff sementara untuk player.
+public enum BuffType { Overdrive, Shield }
+
+public class BuffPickup : MonoBehaviour
+{
+    BuffType type;
+    float life = 25f;
+    PlayerController player;
+
+    public static void Spawn(Vector3 pos, BuffType t)
+    {
+        Color col = t == BuffType.Overdrive ? new Color(1f, 0.85f, 0.3f) : new Color(0.5f, 0.92f, 1f);
+        var sr = SpriteFactory.NewSprite("Buff", GameBootstrap.WorldRoot, col, true, 11, pos, 0.5f);
+        var b = sr.gameObject.AddComponent<BuffPickup>();
+        b.type = t;
+    }
+
+    void Update()
+    {
+        var gm = GameManager.Instance;
+        if (gm == null || !gm.IsRunning) return;
+
+        if (player == null) { player = gm.Player; if (player == null) return; }
+
+        life -= Time.deltaTime;
+        if (life <= 0f) { Destroy(gameObject); return; }
+
+        Vector2 to = (Vector2)player.transform.position - (Vector2)transform.position;
+        float dist = to.magnitude;
+
+        if (dist <= 0.7f)
+        {
+            if (player.Stats != null)
+            {
+                if (type == BuffType.Overdrive) player.Stats.GiveOverdrive(8f);
+                else player.Stats.GiveShield(6f);
+            }
+            AudioManager.Play("levelup", 0.6f);
+            if (UIManager.Instance != null)
+                UIManager.Instance.ShowBanner(type == BuffType.Overdrive
+                    ? "OVERDRIVE!  tembakan 2x lebih cepat"
+                    : "SHIELD!  kebal 6 detik");
+            Destroy(gameObject);
+            return;
+        }
+
+        if (dist <= player.pickupRadius + 1.5f)
+            transform.position += (Vector3)(to.normalized * 10f * Time.deltaTime);
+    }
+}
+
 // Spawner endless: musuh makin kuat seiring waktu, Boss muncul berkala.
 public class EnemySpawner : MonoBehaviour
 {
@@ -323,7 +528,8 @@ public class EnemySpawner : MonoBehaviour
         float scale = 1f + elapsed / 90f + (tier - 1) * 0.35f;
         float hp = (10f + 4f * tier) * scale;
         float spd = Random.Range(1.8f, 2.6f) + tier * 0.08f;
-        float dmg = 6f + tier * 1.5f;
+        // damage NAIK TAJAM tiap tingkat supaya makin menantang
+        float dmg = (6f + tier * 2.2f) * (1f + elapsed / 240f);
 
         Color tint = Tints[(tier - 1) % Tints.Length];
         var def = MonsterArt.GetRegular(Random.Range(0, Mathf.Max(1, MonsterArt.RegularCount)));
@@ -334,19 +540,46 @@ public class EnemySpawner : MonoBehaviour
         e.Configure(player, hp, spd, dmg, 0.35f, 3, false, def, tint);
     }
 
+    // Kombinasi serangan kedua untuk boss cutscene (selalu beda dari yang utama).
+    static BossSkill SecondSkillFor(BossSkill primary)
+    {
+        switch (primary)
+        {
+            case BossSkill.Gun: return BossSkill.Laser;
+            case BossSkill.Aura: return BossSkill.Gun;
+            default: return BossSkill.Aura;
+        }
+    }
+
     void SpawnBoss()
     {
+        bool cutsceneTier = (tier % 3 == 0);   // tingkat 3, 6, 9, ... -> boss ELITE + cutscene
+
         float hp = (120f + 80f * tier) * (1f + elapsed / 150f);
-        var def = MonsterArt.GetBoss(tier - 1);
+        if (cutsceneTier) hp *= 1.4f;          // boss cutscene lebih kuat
+
+        var def = cutsceneTier ? MonsterArt.GetEliteBoss(tier / 3 - 1)
+                               : MonsterArt.GetBoss(tier - 1);
         Color tint = Color.white;
 
         var sr = SpriteFactory.NewSprite("Boss", GameBootstrap.WorldRoot, tint, true, 9,
             EdgePosition(), 1f);
         var e = sr.gameObject.AddComponent<Enemy>();
-        e.Configure(player, hp, 1.5f + tier * 0.05f, 14f + tier * 2f, 0.9f, 25 + tier * 5, true, def, tint);
+        e.Configure(player, hp, 1.5f + tier * 0.05f, (14f + tier * 3f) * (1f + elapsed / 240f), 0.9f, 25 + tier * 5, true, def, tint);
+
+        if (cutsceneTier) e.SetSecondSkill(SecondSkillFor(def.Skill));   // 2 serangan
 
         AudioManager.Play("boss");
         AudioManager.Track("bgm_boss");
-        if (UIManager.Instance != null) UIManager.Instance.ShowBanner("BOSS MUNCUL!");
+
+        var gm = GameManager.Instance;
+        if (gm != null && cutsceneTier)
+        {
+            gm.TriggerBossCutscene(e);   // cutscene + kamera mengarah ke boss
+        }
+        else if (UIManager.Instance != null)
+        {
+            UIManager.Instance.ShowBanner("BOSS MUNCUL!");
+        }
     }
 }

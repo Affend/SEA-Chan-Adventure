@@ -200,6 +200,40 @@ PREVIEW_World
 - Gambar menu → `Assets/Resources/UI/menu_art.png`
 - Suara → `Assets/Resources/Audio/` (`bgm.wav`, `hit.wav`, `laser.wav`, dst)
 
+## Panduan Mengedit Tiap Aset
+
+Semua gambar & suara ada di `Assets/Resources/`. Cukup **timpa / tambah file** — tidak perlu ubah kode.
+
+| Aset | Lokasi | Ketentuan |
+|---|---|---|
+| **Player SEA Chan** | `Resources/SEAChan/` | Pola nama `seachan_front_0..3.png` (menghadap depan) & `seachan_side_0..3.png` (**menghadap KANAN**; arah kiri dicerminkan otomatis). Tinggi karakter diatur di `PlayerVisual.TargetHeight` (default 1.25 unit). |
+| **Robot musuh** | `Resources/Monsters/` | `robot_00_drone.png`, `robot_01_walker.png`, dst. Nama **berisi "boss"** → jadi boss; **berisi "elite"** → boss cutscene (mis. `boss_3_elite_warframe.png`). Bisa 1 gambar atau **strip animasi** (lebar = kelipatan tinggi, mis. 2 frame). |
+| **Lantai & dinding** | `Resources/Environment/` | `floor_block_0/1.png` (blok lantai 2 unit) & `wall_block_0/1.png` (blok dinding 1 unit). Ganti dengan tile yang **menyambung** (tepi rata). |
+| **Dekorasi** | `Resources/Props/` | Nama bebas; semua PNG di folder ini otomatis disebar sebagai dekorasi. |
+| **Gambar menu** | `Resources/UI/menu_art.png` | Artwork besar di menu utama (latar transparan lebih bagus). |
+| **Musik** | `Resources/Audio/` | `bgm_menu.wav`, `bgm_game.wav`, `bgm_boss.wav`, `bgm_defeat.wav` (loop otomatis; `bgm_defeat` sekali putar). |
+| **Efek suara** | `Resources/Audio/` | `hit`, `hurt`, `pickup`, `levelup`, `shoot`, `laser`, `boss`, `gameover`, `ui_click`. |
+
+**Setelah mengganti gambar**, jalankan menu **`SEA Chan > 5. Perbaiki Kualitas Gambar`** supaya gambar tetap tajam (Filter Point, Mip Maps mati).
+
+### Scene Authoring (gampang diedit)
+
+Kalau ingin mengedit seperti project Unity biasa (objek terlihat jelas di Hierarchy):
+
+1. Menu **`SEA Chan > 6. Buat Scene Authoring (gampang diedit)`** → membuat `Assets/Scenes/Authoring.unity`.
+2. Buka scene itu, klik objeknya (mis. **SEA Chan**) → ubah nilainya di **Inspector**:
+   `Move Speed`, `Pickup Radius`, `Dash Speed`, `Dash Cooldown`, dan **posisi Player**.
+3. Tekan **Play** di scene itu — nilai hasil editan kamu **akan dipakai** oleh game.
+   (Objek authoring otomatis disembunyikan saat bermain supaya tidak dobel.)
+
+> Bagian yang diproses kode (lantai, dinding, dekorasi, gelombang musuh) tetap dibuat otomatis saat Play —
+> itu disengaja supaya tidak ada referensi yang "missing".
+
+## Kredit
+
+- **Dibuat oleh: Mentor Divisi Game Dev** — Study Group SEA GEN 11.
+- Karakter **SEA Chan**, kode, UI, robot, dan efek dibuat untuk keperluan *showcase* Study Group Game Development.
+
 ## Troubleshooting
 
 | Masalah | Solusi |
