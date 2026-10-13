@@ -13,6 +13,8 @@ public class ScoreEntry
     public float time;
     // true = skor resmi dari leaderboard.json (bukan hasil main di komputer ini)
     public bool official;
+    // true = skor dari papan online (semua pemain, semua device)
+    public bool online;
 }
 
 [Serializable]
@@ -65,9 +67,10 @@ public static class Leaderboard
         return list.IndexOf(e);
     }
 
+    // Rekor milik pemain di device ini (bukan patokan resmi / skor pemain lain).
     public static int Best()
     {
-        var l = Merged(1);
+        var l = Load();
         return l.Count > 0 ? l[0].score : 0;
     }
 
@@ -93,11 +96,25 @@ public static class Leaderboard
         return result;
     }
 
-    // Gabungan: skor pemain di komputer ini + skor resmi dari file/unduhan.
+    // Gabungan: skor pemain di device ini + skor online (semua pemain) + skor resmi dari file.
     public static List<ScoreEntry> Merged(int maxRows)
     {
         var all = new List<ScoreEntry>();
         all.AddRange(Load());
+
+        // skor online — yang sama persis dengan skor lokal tidak ditampilkan dua kali
+        var online = OnlineLeaderboard.Entries;
+        for (int i = 0; i < online.Count; i++)
+        {
+            var o = online[i];
+            if (o == null) continue;
+
+            bool dup = false;
+            for (int j = 0; j < all.Count; j++)
+                if (all[j].name == o.name && all[j].score == o.score) { dup = true; break; }
+            if (!dup) all.Add(o);
+        }
+
         all.AddRange(LeaderboardSource.Entries);
         all.Sort((a, b) => b.score.CompareTo(a.score));
         if (maxRows > 0 && all.Count > maxRows) all.RemoveRange(maxRows, all.Count - maxRows);
@@ -132,7 +149,8 @@ public static class Leaderboard
 
             sb.Append("<color=").Append(col).Append('>');
             sb.Append(i + 1).Append(".  ");
-            if (e.official) sb.Append("[RESMI] ");   // skor dari file leaderboard
+            if (e.official) sb.Append("[RESMI] ");    // patokan dari file leaderboard
+            else if (e.online) sb.Append("[ONLINE] "); // skor pemain dari device lain
             if (mine) sb.Append("> ");
             sb.Append(e.name)
               .Append("  —  ").Append(e.score)

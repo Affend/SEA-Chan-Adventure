@@ -60,6 +60,9 @@ public class GameManager : MonoBehaviour
     {
         // coba ambil leaderboard resmi terbaru (kalau URL diisi) — gagal pun tidak masalah
         StartCoroutine(LeaderboardSource.RefreshRemote());
+        // papan skor ONLINE: skor semua pemain dari semua device
+        // (otomatis nonaktif kalau PublicKey di OnlineLeaderboard.cs masih kosong)
+        StartCoroutine(OnlineLeaderboard.Fetch());
     }
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]

@@ -1,0 +1,7 @@
+{
+  "items": [
+    { "name": "MENTOR",  "score": 18000, "kills": 500, "bosses": 5, "time": 540 },
+    { "name": "PANITIA", "score": 9000,  "kills": 280, "bosses": 3, "time": 380 },
+    { "name": "TARGET",  "score": 4000,  "kills": 150, "bosses": 1, "time": 210 }
+  ]
+}

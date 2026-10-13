@@ -300,15 +300,37 @@ pilihan gratis yang paling praktis:
 Rancangan paling aman: **skor resmi tetap dari Cara 2** (papan "Hall of Fame" yang kamu kendalikan),
 dan skor pemain pakai layanan online di atas kalau memang perlu kompetisi antar pemain.
 
-### Papan skor saat ini
+### Kenapa daftar skor berbeda antar device? (penting)
 
-Papan skor **hanya berisi skor pemain** (10 besar, tersimpan di komputer itu) — jadi murni kompetisi antar peserta yang mencoba di PC/PC yang sama. Di menu utama tampil **"Rekor tertinggi: N"**.
+Papan skor menggabungkan **3 sumber**:
 
-Fitur **skor resmi** (`leaderboard.json`) tetap ada tetapi **dikosongkan** (`"items": []`), jadi tidak ada baris `[RESMI]` yang muncul. Kalau nanti ingin menambahkan patokan skor (misal rekor panitia), cukup isi kembali file itu lalu build ulang:
+| Sumber | Disimpan di | Terlihat di device lain? |
+|---|---|---|
+| Skor pemain | `PlayerPrefs` (registry Windows) — **per device, per user** | ❌ Tidak |
+| **Daftar resmi** (`StreamingAssets/leaderboard.json`) | ikut di dalam build | ✅ Ya, semua device sama |
+| **Papan online** (dreamlo.com) | server online | ✅ Ya, semua pemain |
 
-```json
-{ "items": [ { "name": "MENTOR", "score": 18000, "kills": 500, "bosses": 5, "time": 540 } ] }
-```
+Jadi kalau `.exe` di laptopmu menampilkan daftar sementara di laptop temanmu kosong, itu **wajar** — skor di `PlayerPrefs` tidak pernah berpindah device. (Di laptopmu daftarnya terisi karena Editor dan build memakai nama produsen/game yang sama, jadi skor uji cobamu ikut terbaca.)
+
+### Cara mengaktifkan papan skor ONLINE (dreamlo) — ±2 menit
+
+1. Buka **https://dreamlo.com** → klik **"Create a new leaderboard"** (gratis, tanpa daftar akun).
+2. Kamu akan melihat dua kode: **PUBLIC CODE** dan **PRIVATE CODE** (rahasia — jangan dipakai di dalam game).
+3. Buka `Assets/Scripts/OnlineLeaderboard.cs`, tempel PUBLIC CODE:
+   ```csharp
+   public const string PublicKey = "TEMPEL-KODE-PUBLIC-DI-SINI";
+   ```
+4. **Build ulang**, lalu upload ZIP ke itch.io.
+
+Setelah aktif:
+
+- Setiap peserta menyimpan skor di layar Game Over → skornya **dikirim ke papan online** dan muncul di device mana pun (butuh internet).
+- Baris skor dari device lain ditandai `[ONLINE]`, sedangkan patokan dari file ditandai `[RESMI]`.
+- Kalau sedang **tanpa internet**, game tetap normal: memakai skor lokal + daftar resmi + hasil unduhan terakhir (di-cache).
+
+**Kalau `PublicKey` dibiarkan kosong:** fitur online nonaktif sepenuhnya (tanpa error/delay) dan game hanya memakai skor lokal + daftar resmi.
+
+**Daftar resmi** (`leaderboard.json`) saat ini berisi 3 patokan — `MENTOR 18000`, `PANITIA 9000`, `TARGET 4000` — yang muncul di semua device. Mau diganti? Cukup edit file itu lalu build ulang (atau isi `RemoteUrl` di `LeaderboardSource.cs` supaya bisa diganti tanpa build ulang).
 
 ## Kredit (untuk publikasi itch.io)
 

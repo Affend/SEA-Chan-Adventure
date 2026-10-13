@@ -1128,6 +1128,22 @@ public class UIManager : MonoBehaviour
         if (nameField != null) nameField.gameObject.SetActive(false);
 
         RefreshBoards();
+
+        // Kirim skor ke papan ONLINE supaya pemain di device lain bisa melihatnya.
+        if (OnlineLeaderboard.Enabled && GameManager.Instance != null)
+        {
+            var e = new ScoreEntry
+            {
+                name = myName,
+                score = pendingScore,
+                kills = pendingKills,
+                bosses = pendingBosses,
+                time = pendingTime
+            };
+            GameManager.Instance.StartCoroutine(OnlineLeaderboard.SubmitAndRefresh(e));
+
+            if (boardHint != null && rank >= 0) boardHint.text += "   •  mengirim ke papan online...";
+        }
     }
 
     void RefreshBoards()
