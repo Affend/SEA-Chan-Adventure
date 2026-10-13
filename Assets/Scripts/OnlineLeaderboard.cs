@@ -5,30 +5,34 @@ using UnityEngine;
 using UnityEngine.Networking;
 
 // =====================================================================
-// PAPAN SKOR ONLINE — semua pemain, semua device, satu papan.
-// Memakai layanan gratis dreamlo.com (tanpa daftar akun, tanpa server sendiri).
+// PAPAN SKOR ONLINE (semua pemain, semua device) memakai dreamlo.com
 //
-// CARA MENGAKTIFKAN (sekali saja, ±2 menit):
-//   1. Buka  https://dreamlo.com
-//   2. Klik "Create a new leaderboard" (gratis) → isi nama apa saja.
-//   3. Kamu akan dapat dua kode: PUBLIC CODE dan PRIVATE CODE.
-//   4. Tempel PUBLIC CODE ke PublicKey di bawah ini, lalu build ulang.
+// PENTING — dari dokumentasi resmi dreamlo:
+//   • Kode PUBLIC  = HANYA untuk MEMBACA papan skor.
+//   • Kode PRIVATE = untuk MENGIRIM / menghapus skor  >>> WAJIB DIISI DI BAWAH.
+//   dreamlo menyarankan kode private di-"compile in your code",
+//   jadi aman ikut di dalam game.
 //
-// Kalau PublicKey dibiarkan kosong -> fitur online otomatis NONAKTIF,
-// game tetap jalan normal (hanya pakai skor lokal + daftar resmi).
+// Cara dapat dua kode itu: https://dreamlo.com -> "Get Yours Now" -> buat leaderboard.
 // =====================================================================
 public static class OnlineLeaderboard
 {
-    // >>> TEMPEL "PUBLIC CODE" DREAMLO DI SINI, contoh: "5f3a1b2c7d8e9f0012ab34cd"
+    // >>> KODE PUBLIC (untuk membaca daftar) <<<
     public const string PublicKey = "6acdf4328f40bc15a8566a28";
+
+    // >>> KODE PRIVATE (untuk mengirim skor) <<<  <-- WAJIB DIISI; kalau kosong skor tidak pernah terkirim
+    public const string PrivateKey = "s4cwNgooz0WP1M3NQT_Z0QlNZ4gRsOmki53Y7xes4LtQ";
 
     const string CacheFile = "online_scores.txt";
 
     public static List<ScoreEntry> Entries { get; private set; } = new List<ScoreEntry>();
     public static string Status { get; private set; } = "";
-    public static bool Enabled => !string.IsNullOrEmpty(PublicKey);
+    public static bool ReadEnabled => !string.IsNullOrEmpty(PublicKey);
+    public static bool WriteEnabled => !string.IsNullOrEmpty(PrivateKey);
 
     static bool loadedCache;
+    static bool hostChecked;
+    static string host = "https://dreamlo.com";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetStatics()
@@ -36,16 +40,59 @@ public static class OnlineLeaderboard
         Entries = new List<ScoreEntry>();
         Status = "";
         loadedCache = false;
+        hostChecked = false;
+        host = "https://dreamlo.com";
     }
 
     static string CachePath { get { return Path.Combine(Application.persistentDataPath, CacheFile); } }
 
-    // ---------------- KIRIM SKOR ----------------
+    // SSL dreamlo bisa belum aktif; kalau begitu https menjawab "ERROR:SSL not enabled".
+    // Otomatis pindah ke http supaya tetap jalan.
+    static IEnumerator EnsureHost()
+    {
+        if (hostChecked) yield break;
+        hostChecked = true;
+        if (!ReadEnabled) yield break;
+
+        using (var req = UnityWebRequest.Get("https://dreamlo.com/lb/" + PublicKey + "/pipe"))
+        {
+            req.timeout = 8;
+            yield return req.SendWebRequest();
+            if (req.result == UnityWebRequest.Result.Success &&
+                req.downloadHandler.text.Contains("SSL not enabled"))
+            {
+                host = "http://dreamlo.com";
+                Debug.Log("[SEA Chan] SSL dreamlo belum aktif -> memakai http.");
+            }
+        }
+    }
+
+    // ---------------- AMBIL DAFTAR (kode PUBLIC) ----------------
+    public static IEnumerator Fetch()
+    {
+        LoadCache();
+        if (!ReadEnabled) yield break;
+        yield return EnsureHost();
+
+        using (var req = UnityWebRequest.Get(host + "/lb/" + PublicKey + "/pipe"))
+        {
+            req.timeout = 8;
+            yield return req.SendWebRequest();
+            HandleResponse(req, "daftar");
+        }
+
+        if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
+    }
+
+    // ---------------- KIRIM SKOR (kode PRIVATE) ----------------
+    // "add-pipe" = kirim skor SEKALIGUS minta daftar terbaru dalam satu permintaan
+    // (hemat, karena dreamlo membatasi 1 permintaan per detik).
     public static IEnumerator Submit(string name, int score, int kills, int bosses, int seconds)
     {
-        if (!Enabled) yield break;
+        if (!WriteEnabled) yield break;
+        yield return EnsureHost();
 
-        string url = "https://dreamlo.com/lb/" + PublicKey + "/add/" +
+        string url = host + "/lb/" + PrivateKey + "/add-pipe/" +
                      UnityWebRequest.EscapeURL(name) + "/" + score + "/" + seconds + "/" +
                      UnityWebRequest.EscapeURL(kills + "-" + bosses);
 
@@ -53,53 +100,78 @@ public static class OnlineLeaderboard
         {
             req.timeout = 8;
             yield return req.SendWebRequest();
-            if (req.result != UnityWebRequest.Result.Success)
-                Debug.LogWarning("[SEA Chan] Gagal kirim skor online: " + req.error);
+            HandleResponse(req, "kirim skor");
         }
     }
 
-    // ---------------- AMBIL DAFTAR ----------------
-    public static IEnumerator Fetch()
-    {
-        LoadCache();
-        if (!Enabled) yield break;
-
-        string url = "https://dreamlo.com/lb/" + PublicKey + "/pipe";
-        using (var req = UnityWebRequest.Get(url))
-        {
-            req.timeout = 8;
-            yield return req.SendWebRequest();
-
-            if (req.result == UnityWebRequest.Result.Success)
-            {
-                var list = ParsePipe(req.downloadHandler.text);
-                if (list.Count > 0)
-                {
-                    Entries = list;
-                    try { File.WriteAllText(CachePath, req.downloadHandler.text); } catch { }
-                    Status = list.Count + " skor dari semua pemain";
-                }
-                else
-                {
-                    Status = "belum ada skor online";
-                }
-            }
-            else
-            {
-                Status = "tidak bisa online (pakai data terakhir)";
-                Debug.LogWarning("[SEA Chan] Gagal ambil papan online: " + req.error);
-            }
-
-            if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
-        }
-    }
-
-    // Kirim skor lalu langsung perbarui tampilan papan skor.
     public static IEnumerator SubmitAndRefresh(ScoreEntry e)
     {
         yield return Submit(e.name, e.score, e.kills, e.bosses, Mathf.FloorToInt(e.time));
-        yield return Fetch();
         if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
+    }
+
+    // Kirim semua skor yang tersimpan di laptop ini
+    // (mis. skor lama yang didapat SEBELUM fitur online diaktifkan).
+    public static IEnumerator SubmitAllLocal()
+    {
+        if (!WriteEnabled)
+        {
+            Status = "kode PRIVATE belum diisi";
+            if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
+            yield break;
+        }
+
+        var local = Leaderboard.Load();
+        if (local.Count == 0)
+        {
+            Status = "belum ada skor di laptop ini";
+            if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
+            yield break;
+        }
+
+        for (int i = 0; i < local.Count; i++)
+        {
+            var e = local[i];
+            Status = "mengirim " + (i + 1) + "/" + local.Count + " ...";
+            if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
+
+            yield return Submit(e.name, e.score, e.kills, e.bosses, Mathf.FloorToInt(e.time));
+            yield return new WaitForSecondsRealtime(1.3f);   // batas dreamlo: 1 permintaan / detik
+        }
+
+        Status = local.Count + " skor dari laptop ini sudah dikirim";
+        if (UIManager.Instance != null) UIManager.Instance.RefreshLeaderboard();
+    }
+
+    // ---------------- PEMBANTU ----------------
+    static void HandleResponse(UnityWebRequest req, string what)
+    {
+        if (req.result != UnityWebRequest.Result.Success)
+        {
+            Status = "tidak bisa online (pakai data terakhir)";
+            Debug.LogWarning("[SEA Chan] Gagal " + what + " ke dreamlo: " + req.error);
+            return;
+        }
+
+        string body = req.downloadHandler.text;
+        if (body.StartsWith("ERROR"))
+        {
+            Status = body.Trim();
+            Debug.LogWarning("[SEA Chan] dreamlo menolak " + what + ": " + Status);
+            return;
+        }
+
+        var list = ParsePipe(body);
+        if (list.Count > 0)
+        {
+            Entries = list;
+            try { File.WriteAllText(CachePath, body); } catch { }
+            Status = list.Count + " skor dari semua pemain";
+        }
+        else
+        {
+            Status = "belum ada skor online";
+        }
     }
 
     static void LoadCache()
@@ -113,26 +185,30 @@ public static class OnlineLeaderboard
         catch { }
     }
 
-    // Format "pipe" dari dreamlo:  nama|skor|detik|teks|nama|skor|detik|teks|...
-    // (teks dipakai menyimpan jumlah musuh & boss dalam bentuk "musuh-boss")
+    // Format dreamlo: nama|skor|detik|teks|...   (teks dipakai menyimpan "musuh-boss")
     static List<ScoreEntry> ParsePipe(string raw)
     {
         var list = new List<ScoreEntry>();
         if (string.IsNullOrEmpty(raw)) return list;
 
-        var parts = raw.Split('|');
-        for (int i = 0; i + 2 < parts.Length; i += 4)
+        string[] f = raw.Split('|');
+        int n = f.Length;
+        if (n > 0 && string.IsNullOrEmpty(f[n - 1].Trim())) n--;   // buang kolom kosong terakhir
+
+        int stride = GuessStride(f, n);
+        for (int i = 0; i + 2 < n; i += stride)
         {
-            string name = parts[i].Trim();
+            string name = f[i].Trim();
             if (string.IsNullOrEmpty(name)) continue;
+            if (name.StartsWith("ERROR")) continue;     // pesan error dreamlo, bukan skor
 
             int score = 0, secs = 0, kills = 0, bosses = 0;
-            int.TryParse(parts[i + 1].Trim(), out score);
-            int.TryParse(parts[i + 2].Trim(), out secs);
+            int.TryParse(f[i + 1].Trim(), out score);
+            int.TryParse(f[i + 2].Trim(), out secs);
 
-            if (i + 3 < parts.Length)
+            if (i + 3 < n)
             {
-                var t = parts[i + 3].Trim().Split('-');
+                var t = f[i + 3].Trim().Split('-');
                 if (t.Length > 0) int.TryParse(t[0], out kills);
                 if (t.Length > 1) int.TryParse(t[1], out bosses);
             }
@@ -148,5 +224,23 @@ public static class OnlineLeaderboard
             });
         }
         return list;
+    }
+
+    // Sebagian server dreamlo menambah kolom tanggal & flag (6 kolom, bukan 4).
+    static int GuessStride(string[] f, int n)
+    {
+        if (n >= 6 && n % 6 == 0 && n % 4 != 0) return 6;
+        if (n >= 4 && n % 4 == 0 && n % 6 != 0) return 4;
+        if (n >= 6 && LooksLikeDate(f[4])) return 6;
+        return 4;
+    }
+
+    static bool LooksLikeDate(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return false;
+        if (s.IndexOf(':') < 0) return false;
+        return s.IndexOf('/') >= 0 ||
+               s.IndexOf("AM", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+               s.IndexOf("PM", System.StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }

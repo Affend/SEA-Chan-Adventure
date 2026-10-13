@@ -314,19 +314,32 @@ Jadi kalau `.exe` di laptopmu menampilkan daftar sementara di laptop temanmu kos
 
 ### Cara mengaktifkan papan skor ONLINE (dreamlo) — ±2 menit
 
-1. Buka **https://dreamlo.com** → klik **"Create a new leaderboard"** (gratis, tanpa daftar akun).
-2. Kamu akan melihat dua kode: **PUBLIC CODE** dan **PRIVATE CODE** (rahasia — jangan dipakai di dalam game).
-3. Buka `Assets/Scripts/OnlineLeaderboard.cs`, tempel PUBLIC CODE:
+> **PENTING — ini penyebab skor tidak terkirim:** dreamlo punya **DUA** kode.
+> **Kode PUBLIC hanya untuk MEMBACA** papan skor, sedangkan untuk **MENGIRIM** skor wajib
+> **kode PRIVATE**. Kalau hanya kode public yang diisi, semua kiriman ditolak
+> (`ERROR:Unknown verb`) dan papan online tetap kosong.
+
+1. Buka **https://dreamlo.com** → klik **"Get Yours Now"** → buat leaderboard (gratis, tanpa akun).
+2. Kamu akan melihat **dua** kode: **PUBLIC** dan **PRIVATE**.
+3. Buka `Assets/Scripts/OnlineLeaderboard.cs`, lalu isi **keduanya**:
    ```csharp
-   public const string PublicKey = "TEMPEL-KODE-PUBLIC-DI-SINI";
+   public const string PublicKey  = "kode-public";     // untuk MEMBACA daftar
+   public const string PrivateKey = "kode-private";    // untuk MENGIRIM skor  <-- WAJIB
    ```
 4. **Build ulang**, lalu upload ZIP ke itch.io.
 
 Setelah aktif:
 
-- Setiap peserta menyimpan skor di layar Game Over → skornya **dikirim ke papan online** dan muncul di device mana pun (butuh internet).
-- Baris skor dari device lain ditandai `[ONLINE]`, sedangkan patokan dari file ditandai `[RESMI]`.
-- Kalau sedang **tanpa internet**, game tetap normal: memakai skor lokal + daftar resmi + hasil unduhan terakhir (di-cache).
+- Halaman **PAPAN SKOR** menampilkan statusnya: *"papan online aktif — 5 skor dari semua pemain"*.
+- Di halaman itu ada tombol **"KIRIM SKOR DI LAPTOP INI KE PAPAN ONLINE"** — dipakai untuk mengirim
+  **skor lama** yang sudah tersimpan sebelum fitur online dinyalakan (mis. skor `FEN` milikmu).
+  Pengiriman dilakukan satu per satu (dreamlo membatasi 1 permintaan/detik), jadi tunggu sampai status berubah.
+- Skor **baru** otomatis terkirim setiap peserta menekan **SIMPAN SKOR**.
+- Baris dari device lain ditandai `[ONLINE]`; patokan dari file ditandai `[RESMI]`.
+
+**Soal SSL:** dreamlo punya opsi SSL per-leaderboard. Kalau SSL belum aktif, game **otomatis memakai
+`http://`** (sudah ditangani di kode — tidak ada yang perlu diubah). Kalau ingin lebih aman, aktifkan
+**SSL** di halaman pengaturan leaderboard di dreamlo.
 
 **Kalau `PublicKey` dibiarkan kosong:** fitur online nonaktif sepenuhnya (tanpa error/delay) dan game hanya memakai skor lokal + daftar resmi.
 

@@ -36,6 +36,8 @@ public class UIManager : MonoBehaviour
     // ---- pengaturan: layar & tombol ----
     Button screenBtn;
     Button uiScaleBtn;
+    Text onlineStatusText;
+    Button sendOnlineBtn;
     readonly Dictionary<GameAction, Button> keyButtons = new Dictionary<GameAction, Button>();
     GameAction? capturing;
     float captureGuard;
@@ -893,7 +895,40 @@ public class UIManager : MonoBehaviour
     public void RefreshLeaderboard()
     {
         RefreshBoards();
+        RefreshOnlineStatus();
         if (menuBestText != null) menuBestText.text = "Rekor tertinggi: " + Leaderboard.Best();
+    }
+
+    // Keterangan status papan online + tampilkan tombol kirim kalau kode PRIVATE sudah diisi.
+    void RefreshOnlineStatus()
+    {
+        if (onlineStatusText != null)
+        {
+            if (!OnlineLeaderboard.ReadEnabled && !OnlineLeaderboard.WriteEnabled)
+                onlineStatusText.text = "papan online tidak aktif";
+            else if (!OnlineLeaderboard.WriteEnabled)
+                onlineStatusText.text = "papan online: hanya bisa membaca — kode PRIVATE belum diisi di OnlineLeaderboard.cs";
+            else
+                onlineStatusText.text = string.IsNullOrEmpty(OnlineLeaderboard.Status)
+                    ? "papan online aktif — memuat..."
+                    : "papan online aktif — " + OnlineLeaderboard.Status;
+        }
+
+        if (sendOnlineBtn != null)
+            sendOnlineBtn.gameObject.SetActive(OnlineLeaderboard.WriteEnabled);
+    }
+
+    // Tombol: kirim semua skor yang tersimpan di laptop ini ke papan online.
+    void SendLocalToOnline()
+    {
+        if (!OnlineLeaderboard.WriteEnabled)
+        {
+            if (onlineStatusText != null)
+                onlineStatusText.text = "Kode PRIVATE dreamlo belum diisi di OnlineLeaderboard.cs";
+            return;
+        }
+        if (GameManager.Instance != null)
+            GameManager.Instance.StartCoroutine(OnlineLeaderboard.SubmitAllLocal());
     }
 
     // Dipanggil saat suara di-toggle dengan tombol cepat.
@@ -1021,8 +1056,17 @@ public class UIManager : MonoBehaviour
             new Vector2(0f, 236f), new Vector2(940f, 30f), 22, UIFactory.TextDim, TextAnchor.MiddleCenter);
 
         bigBoardText = UIFactory.Label(card, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-            new Vector2(0.5f, 0.5f), new Vector2(0f, 20f), new Vector2(980f, 380f), 26,
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 5f), new Vector2(980f, 360f), 26,
             UIFactory.TextMain, TextAnchor.UpperCenter);
+
+        // status papan online (supaya kelihatan sudah nyambung / belum)
+        onlineStatusText = UIFactory.Label(card, "", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
+            new Vector2(0.5f, 0.5f), new Vector2(0f, 206f), new Vector2(980f, 26f), 17,
+            UIFactory.TextDim, TextAnchor.MiddleCenter);
+
+        // kirim skor lama (yang tersimpan di laptop ini) ke papan online
+        sendOnlineBtn = UIFactory.TextButton(card, "KIRIM SKOR DI LAPTOP INI KE PAPAN ONLINE",
+            new Vector2(0f, -218f), new Vector2(700f, 54f), 20, () => SendLocalToOnline());
 
         UIFactory.TextButton(card, "KEMBALI", new Vector2(0f, -280f), new Vector2(360f, 66f), 28,
             () => { ShowLeaderboard(false); ShowMenu(true); });
@@ -1080,7 +1124,7 @@ public class UIManager : MonoBehaviour
     {
         if (leaderboardRoot == null) return;
         leaderboardRoot.SetActive(on);
-        if (on) RefreshBoards();
+        if (on) { RefreshBoards(); RefreshOnlineStatus(); }
     }
 
     public void ShowGameOverStats(float time, int kills, int level, int bosses, int score)
@@ -1130,7 +1174,7 @@ public class UIManager : MonoBehaviour
         RefreshBoards();
 
         // Kirim skor ke papan ONLINE supaya pemain di device lain bisa melihatnya.
-        if (OnlineLeaderboard.Enabled && GameManager.Instance != null)
+        if (OnlineLeaderboard.WriteEnabled && GameManager.Instance != null)
         {
             var e = new ScoreEntry
             {
